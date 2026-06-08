@@ -267,6 +267,90 @@
         // Service worker no disponible, la app sigue funcionando sin offline
       });
     }
+
+    // Chat
+    $('btn-go-chat').addEventListener('click', () => showPage('page-chat'));
+    $('btn-back-chat').addEventListener('click', () => showPage('page-expenses'));
+    $('btn-send-message').addEventListener('click', handleSendMessage);
+    $('chat-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        handleSendMessage();
+      }
+    });
+  }
+
+  /* -----------------------------------------------------------
+     7b. CHATBOT
+     ----------------------------------------------------------- */
+  function addChatMessage(text, isUser = false) {
+    const li = document.createElement('li');
+    li.className = `flex ${isUser ? 'justify-end' : 'justify-start'}`;
+
+    const div = document.createElement('div');
+    div.className = `max-w-xs rounded-2xl px-4 py-3 text-sm ${
+      isUser ? 'bg-purple-600 text-white' : 'bg-slate-200 text-slate-800'
+    }`;
+    div.textContent = text;
+
+    li.appendChild(div);
+    $('chat-messages').appendChild(li);
+
+    // Auto scroll al final
+    setTimeout(() => {
+      const main = $('chat-messages').parentElement;
+      main.scrollTop = main.scrollHeight;
+    }, 100);
+  }
+
+  async function handleSendMessage() {
+    const input = $('chat-input');
+    const message = input.value.trim();
+
+    if (!message) return;
+
+    // Agregar mensaje del usuario
+    addChatMessage(message, true);
+    input.value = '';
+    $('btn-send-message').disabled = true;
+
+    try {
+      // Preparar contexto de gastos
+      const context = {
+        balance: state.balance,
+        totalSpent: getTotalSpent(),
+        numExpenses: state.expenses.length,
+        categories: {},
+        expenses: state.expenses.slice(-10), // últimos 10 gastos
+      };
+
+      state.expenses.forEach((e) => {
+        context.categories[e.category] = (context.categories[e.category] || 0) + e.amount;
+      });
+
+      // Llamar al endpoint
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: message,
+          context: context,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Error ${response.status}`);
+      }
+
+      const data = await response.json();
+      addChatMessage(data.reply || 'No pude procesar tu pregunta.');
+    } catch (err) {
+      console.error(err);
+      addChatMessage('⚠️ Error al conectar con el asistente. Intenta más tarde.');
+    } finally {
+      $('btn-send-message').disabled = false;
+      input.focus();
+    }
   }
 
   document.addEventListener('DOMContentLoaded', init);

@@ -184,12 +184,70 @@
 
       <!-- Navegación inferior -->
       <footer class="sticky bottom-0 border-t border-slate-200 bg-slate-50/90 p-4 backdrop-blur">
-        <button
-          id="btn-go-home"
-          class="flex w-full items-center justify-center gap-2 rounded-2xl bg-brand py-4 text-lg font-bold text-white shadow-lg transition active:scale-[0.98]"
-        >
-          🧮 Volver a la calculadora
+        <div class="flex gap-2">
+          <button
+            id="btn-go-chat"
+            class="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-purple-600 py-4 text-lg font-bold text-white shadow-lg transition active:scale-[0.98]"
+          >
+            💬 Chat
+          </button>
+          <button
+            id="btn-go-home"
+            class="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-brand py-4 text-lg font-bold text-white shadow-lg transition active:scale-[0.98]"
+          >
+            🧮 Volver
+          </button>
+        </div>
+      </footer>
+    </section>
+
+    <!-- ===================================================== -->
+    <!-- PÁGINA 3: CHATBOT GESTOR DE GASTOS                    -->
+    <!-- ===================================================== -->
+    <section id="page-chat" class="page hidden flex-1 flex-col">
+
+      <!-- Encabezado -->
+      <header class="sticky top-0 z-10 flex items-center gap-3 bg-gradient-to-r from-purple-600 to-purple-700 px-5 py-4 text-white shadow-lg">
+        <button id="btn-back-chat" class="rounded-full p-2 transition active:bg-purple-500" aria-label="Volver">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
         </button>
+        <div>
+          <h2 class="text-xl font-extrabold tracking-tight">Gestor Inteligente 🤖</h2>
+          <p class="text-xs text-purple-100">Asistente de gastos</p>
+        </div>
+      </header>
+
+      <!-- Chat messages -->
+      <main class="flex-1 overflow-y-auto px-4 py-4">
+        <ul id="chat-messages" class="flex flex-col gap-3">
+          <li class="flex justify-start">
+            <div class="max-w-xs rounded-2xl bg-slate-200 px-4 py-3 text-sm text-slate-800">
+              👋 Hola, soy tu asistente de gastos. Cuéntame cómo te va financieramente, pregúntame sobre tus hábitos de gasto, o pídeme consejos. ¿Qué necesitas?
+            </div>
+          </li>
+        </ul>
+      </main>
+
+      <!-- Input del chat -->
+      <footer class="border-t border-slate-200 bg-white px-4 py-3">
+        <div class="flex gap-2">
+          <input
+            id="chat-input"
+            type="text"
+            placeholder="Escribe tu pregunta..."
+            class="flex-1 rounded-full border border-slate-300 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-200"
+          />
+          <button
+            id="btn-send-message"
+            class="flex items-center justify-center rounded-full bg-purple-600 p-3 text-white transition active:scale-[0.95] active:bg-purple-700 disabled:opacity-50"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M16.6915026,12.4744748 L3.50612381,13.2599618 C3.19218622,13.2599618 3.03521743,13.4170592 3.03521743,13.5741566 L1.15159189,20.0151496 C0.8376543,20.8006365 0.99,21.89 1.77946707,22.52 C2.41,22.99 3.50612381,23.1 4.13399899,22.8429026 L21.714504,14.0454487 C22.6563168,13.5741566 23.1272231,12.6315722 22.9702544,11.6889879 L4.13399899,1.16346272 C3.34915502,0.9 2.40734225,1.00636533 1.77946707,1.4776575 C0.994623095,2.10604706 0.837654326,3.0486314 1.15159189,3.99021575 L3.03521743,10.4311088 C3.03521743,10.5882061 3.19218622,10.7453035 3.50612381,10.7453035 L16.6915026,11.5307905 C16.6915026,11.5307905 17.1624089,11.5307905 17.1624089,12.0020827 C17.1624089,12.4744748 16.6915026,12.4744748 16.6915026,12.4744748 Z" />
+            </svg>
+          </button>
+        </div>
       </footer>
     </section>
 
