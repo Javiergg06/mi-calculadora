@@ -315,42 +315,85 @@
     $('btn-send-message').disabled = true;
 
     try {
-      // Preparar contexto de gastos
-      const context = {
-        balance: state.balance,
-        totalSpent: getTotalSpent(),
-        numExpenses: state.expenses.length,
-        categories: {},
-        expenses: state.expenses.slice(-10), // últimos 10 gastos
-      };
+      // Simular latencia
+      await new Promise((r) => setTimeout(r, 600));
 
-      state.expenses.forEach((e) => {
-        context.categories[e.category] = (context.categories[e.category] || 0) + e.amount;
-      });
-
-      // Llamar al endpoint
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: message,
-          context: context,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Error ${response.status}`);
-      }
-
-      const data = await response.json();
-      addChatMessage(data.reply || 'No pude procesar tu pregunta.');
+      // Generar respuesta inteligente basada en gastos
+      const reply = generateSmartReply(message);
+      addChatMessage(reply);
     } catch (err) {
       console.error(err);
-      addChatMessage('⚠️ Error al conectar con el asistente. Intenta más tarde.');
+      addChatMessage('⚠️ No pude procesar tu pregunta. Intenta preguntar sobre tus gastos.');
     } finally {
       $('btn-send-message').disabled = false;
       input.focus();
     }
+  }
+
+  function generateSmartReply(userMessage) {
+    const msg = userMessage.toLowerCase();
+    const balance = state.balance;
+    const spent = getTotalSpent();
+    const numExpenses = state.expenses.length;
+
+    // Calcular categorías
+    const categories = {};
+    state.expenses.forEach((e) => {
+      categories[e.category] = (categories[e.category] || 0) + e.amount;
+    });
+
+    const topCategory = Object.entries(categories).sort((a, b) => b[1] - a[1])[0];
+    const totalBalance = balance + spent; // dinero total que tenía
+
+    // Respuestas según palabras clave
+    if (msg.includes('hola') || msg.includes('ayuda') || msg.includes('qué')) {
+      return '👋 Hola! Soy tu asistente de gastos. Puedo ayudarte con:\n• Consejos para ahorrar\n• Análisis de tus gastos\n• Sugerencias por categoría\n¿Qué necesitas?';
+    }
+
+    if (msg.includes('consejo') || msg.includes('ahorrar')) {
+      let advice = '💡 Mis consejos para ahorrar:\n';
+      if (numExpenses === 0) {
+        advice += '✓ Aún no tienes gastos. Empieza a registrarlos para que pueda ayudarte mejor.';
+      } else if (spent > totalBalance * 0.7) {
+        advice += `✓ Cuidado: has gastado ${((spent / totalBalance) * 100).toFixed(0)}% de tu dinero. Reduce gastos.\n`;
+        advice += `✓ Tu categoría mayor es "${topCategory[0]}" (€${topCategory[1].toFixed(2)}). Intenta reducirla un 15%.\n`;
+        advice += '✓ Fija un límite diario de gasto.';
+      } else {
+        advice += `✓ Vas bien, solo has gastado ${((spent / totalBalance) * 100).toFixed(0)}%.\n`;
+        advice += `✓ Mantén esta tendencia y sigue ahorrando.\n`;
+        advice += `✓ Te quedan €${balance.toFixed(2)} disponibles.`;
+      }
+      return advice;
+    }
+
+    if (msg.includes('gasto') || msg.includes('categoría')) {
+      if (numExpenses === 0) {
+        return '📊 No tienes gastos registrados aún. ¡Empieza a anotarlos!';
+      }
+      let report = '📊 Resumen de gastos:\n';
+      Object.entries(categories)
+        .sort((a, b) => b[1] - a[1])
+        .forEach(([cat, amt]) => {
+          report += `• ${cat}: €${amt.toFixed(2)}\n`;
+        });
+      report += `\nTotal gastado: €${spent.toFixed(2)}`;
+      return report;
+    }
+
+    if (msg.includes('dinero') || msg.includes('saldo') || msg.includes('balance')) {
+      return `💰 Tu situación financiera:\n• Disponible: €${balance.toFixed(2)}\n• Gastado: €${spent.toFixed(2)}\n• Total inicial: €${totalBalance.toFixed(2)}\n• Porcentaje gastado: ${((spent / totalBalance) * 100).toFixed(1)}%`;
+    }
+
+    if (msg.includes('tendencia') || msg.includes('patrón')) {
+      if (numExpenses < 2) {
+        return '📈 Necesito más gastos para analizar tendencias. ¡Sigue registrando!';
+      }
+      const avg = spent / numExpenses;
+      return `📈 Tu gasto promedio es €${avg.toFixed(2)} por movimiento.\nTienes ${numExpenses} gastos registrados.`;
+    }
+
+    // Respuesta por defecto
+    return '🤔 No entiendo bien. Puedo ayudarte con:\n• "Consejos para ahorrar"\n• "Resumen de gastos"\n• "Cuál es mi saldo"\n¿Qué te interesa?';
   }
 
   document.addEventListener('DOMContentLoaded', init);
