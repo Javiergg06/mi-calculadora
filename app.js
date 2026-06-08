@@ -279,6 +279,11 @@
         categoryInput.focus();
         return;
       }
+      if (amount > state.balance) {
+        showFeedback(`Saldo insuficiente. Solo tienes ${formatMoney(state.balance)}.`, 'error');
+        amountInput.focus();
+        return;
+      }
 
       const expense = {
         id:       Date.now(),
