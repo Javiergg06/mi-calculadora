@@ -76,7 +76,11 @@
       <!-- Formulario -->
       <main class="flex flex-1 flex-col gap-3 px-5 py-5">
 
-        <p class="section-label px-1">Nuevo gasto</p>
+        <!-- Selector Gasto / Ingreso -->
+        <div class="mode-toggle">
+          <button id="btn-mode-expense" class="mode-btn is-active">💸 Gasto</button>
+          <button id="btn-mode-income"  class="mode-btn">💰 Ingreso</button>
+        </div>
 
         <!-- Importe -->
         <div class="card p-5">
@@ -97,7 +101,7 @@
 
         <!-- Categoría -->
         <div class="card p-5">
-          <label for="input-category" class="field-label">¿En qué lo has gastado?</label>
+          <label for="input-category" id="label-category" class="field-label">¿En qué lo has gastado?</label>
           <input
             id="input-category"
             type="text"
@@ -116,7 +120,7 @@
           <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
           </svg>
-          Añadir gasto
+          <span id="btn-register-text">Añadir gasto</span>
         </button>
 
       </main>

@@ -363,6 +363,49 @@ input { user-select: text; }
   to   { opacity: 1; transform: translateY(0); }
 }
 
+/* ── Mode toggle (Gasto / Ingreso) ───────────────────────── */
+.mode-toggle {
+  display: flex;
+  background: #ede9fe;
+  border-radius: 14px;
+  padding: 4px;
+  gap: 3px;
+}
+.mode-btn {
+  flex: 1;
+  padding: 0.6rem 0.75rem;
+  border-radius: 10px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  color: #7c3aed;
+  background: transparent;
+}
+.mode-btn.is-active {
+  background: #fff;
+  color: #4f46e5;
+  box-shadow: 0 2px 8px rgba(99,102,241,0.18);
+}
+.mode-btn.is-active.income-active {
+  color: #047857;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(16,185,129,0.18);
+}
+
+/* Botón en modo ingreso → verde */
+.btn-primary.is-income {
+  background: linear-gradient(135deg, #047857, #10b981, #06b6d4);
+  box-shadow: 0 8px 28px rgba(16,185,129,0.35);
+}
+
+/* Income item en el historial */
+.income-chip {
+  font-weight: 900;
+  color: #059669;
+}
+
 /* ── Feedback colors ─────────────────────────────────────── */
 .text-emerald-600 { color: #059669; }
 .text-rose-600    { color: #e11d48; }
