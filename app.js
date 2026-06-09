@@ -871,9 +871,54 @@
   .ai-card-text{ font-size:11px; line-height:1.65; color:var(--navy); white-space:pre-wrap; }
 
   .report-foot{ margin-top:30px; padding-top:14px; border-top:1px solid var(--border); display:flex; justify-content:space-between; font-size:8.5px; color:var(--muted-2); letter-spacing:0.04em; }
+
+  /* ── Barra de acciones (solo pantalla, no se imprime) ── */
+  .toolbar{ position:fixed; top:0; left:0; right:0; z-index:50; display:flex; gap:10px; align-items:center; justify-content:space-between; padding:11px 16px; padding-top:max(11px, env(safe-area-inset-top, 0px)); background:rgba(15,23,42,0.97); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); }
+  .toolbar-title{ font-size:13px; font-weight:600; color:#fff; letter-spacing:0.02em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .toolbar-actions{ display:flex; gap:8px; flex-shrink:0; }
+  .tb-btn{ font-family:'Inter',sans-serif; font-size:13px; font-weight:600; border:none; border-radius:10px; padding:9px 15px; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+  .tb-save{ background:#fff; color:var(--navy); }
+  .tb-close{ background:rgba(255,255,255,0.16); color:#fff; }
+
+  /* ── Vista en pantalla (móvil y escritorio) ── */
+  @media screen{
+    body{ background:#E9EAEE; }
+    .sheet{ max-width:760px; margin:62px auto 32px; background:#fff; padding:38px 34px; border-radius:16px; box-shadow:0 10px 40px rgba(15,23,42,0.13); }
+  }
+  /* ── Móvil ── */
+  @media screen and (max-width:600px){
+    .toolbar-title{ display:none; }
+    .toolbar-actions{ flex:1; }
+    .tb-btn{ flex:1; padding:11px 12px; }
+    .sheet{ margin:58px 0 0; border-radius:0; padding:24px 18px 40px; box-shadow:none; min-height:100vh; }
+    .report-head{ flex-direction:column; gap:12px; padding-bottom:16px; margin-bottom:22px; }
+    .report-meta{ text-align:left; padding-top:0; }
+    .report-title{ font-size:27px; }
+    .summary{ flex-direction:column; gap:10px; margin-bottom:24px; }
+    .sum-box{ padding:15px 17px; }
+    .cell-date{ padding-right:10px; }
+    .report-foot{ flex-direction:column; gap:4px; }
+  }
+
+  /* ── Impresión / PDF: oculta la barra y restablece formato A4 ── */
+  @media print{
+    .toolbar{ display:none !important; }
+    body{ background:#fff; }
+    .sheet{ max-width:none; margin:0; padding:0; border-radius:0; box-shadow:none; min-height:0; }
+  }
 </style>
 </head>
 <body>
+
+  <div class="toolbar">
+    <span class="toolbar-title">Informe · ${escapeHtml(monthLabel)}</span>
+    <div class="toolbar-actions">
+      <button class="tb-btn tb-close" onclick="window.close()">Cerrar</button>
+      <button class="tb-btn tb-save" onclick="window.print()">📄 Guardar PDF</button>
+    </div>
+  </div>
+
+  <main class="sheet">
 
   <header class="report-head">
     <div>
@@ -945,15 +990,7 @@
     <span>Documento confidencial</span>
   </footer>
 
-  <script>
-    window.addEventListener('load', function () {
-      if (document.fonts && document.fonts.ready) {
-        document.fonts.ready.then(function () { setTimeout(function(){ window.print(); }, 250); });
-      } else {
-        setTimeout(function(){ window.print(); }, 600);
-      }
-    });
-  <\/script>
+  </main>
 </body>
 </html>`;
   }
