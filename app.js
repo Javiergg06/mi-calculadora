@@ -569,6 +569,549 @@
   }
 
   /* -----------------------------------------------------------
+     8. INFORME MENSUAL
+     ----------------------------------------------------------- */
+
+  // ── Modal helpers ────────────────────────────────────────────
+  function openReportModal() {
+    const select = $('report-month');
+    select.innerHTML = '';
+    const now = new Date();
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const value = `${d.getFullYear()}-${d.getMonth()}`;
+      const label = d.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+      const opt = document.createElement('option');
+      opt.value = value;
+      opt.textContent = label.charAt(0).toUpperCase() + label.slice(1);
+      select.appendChild(opt);
+    }
+    showReportState('form');
+    $('modal-report').classList.remove('hidden');
+    setTimeout(() => $('report-email').focus(), 120);
+  }
+
+  function closeReportModal() {
+    $('modal-report').classList.add('hidden');
+  }
+
+  function showReportState(s) {
+    ['form', 'loading', 'success', 'error'].forEach((id) => {
+      $('report-' + id).classList.toggle('hidden', id !== s);
+    });
+  }
+
+  // ── Main handler ─────────────────────────────────────────────
+  async function handleGenerateReport() {
+    const emailInput = $('report-email');
+    const email = emailInput.value.trim();
+
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      emailInput.style.borderColor = '#f43f5e';
+      emailInput.focus();
+      setTimeout(() => { emailInput.style.borderColor = ''; }, 2000);
+      return;
+    }
+
+    const [year, month] = $('report-month').value.split('-').map(Number);
+    const monthLabel = new Date(year, month, 1)
+      .toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+    const monthLabelCap = monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1);
+
+    showReportState('loading');
+    setLoadingText('Filtrando datos del mes…');
+
+    try {
+      // 1. Filter data
+      const mExp = state.expenses.filter((e) => {
+        const d = new Date(e.date);
+        return d.getMonth() === month && d.getFullYear() === year;
+      });
+      const mInc = state.incomes.filter((i) => {
+        const d = new Date(i.date);
+        return d.getMonth() === month && d.getFullYear() === year;
+      });
+
+      const totalSpent  = mExp.reduce((a, e) => a + e.amount, 0);
+      const totalIncome = mInc.reduce((a, i) => a + i.amount, 0);
+      const netBalance  = totalIncome - totalSpent;
+
+      const cats = {};
+      mExp.forEach((e) => { cats[e.category] = (cats[e.category] || 0) + e.amount; });
+      const sortedCats = Object.entries(cats).sort((a, b) => b[1] - a[1]);
+
+      // 2. AI analysis
+      setLoadingText('Analizando con IA…');
+      let aiAnalysis = null;
+      try {
+        aiAnalysis = await getMonthlyAIAnalysis(monthLabelCap, mExp, mInc, cats, totalSpent, totalIncome);
+      } catch (_) { /* AI optional */ }
+
+      // 3. Charts
+      setLoadingText('Generando gráficos…');
+      let catChartImg  = null;
+      let dailyChartImg = null;
+      if (sortedCats.length > 0) {
+        try { catChartImg  = await renderCategoryChart(sortedCats); } catch (_) {}
+        try { dailyChartImg = await renderDailyChart(mExp, month, year); } catch (_) {}
+      }
+
+      // 4. Build PDF
+      setLoadingText('Creando PDF…');
+      const doc = buildReportPDF({
+        monthLabel: monthLabelCap,
+        totalSpent, totalIncome, netBalance,
+        sortedCats, mExp, mInc,
+        catChartImg, dailyChartImg, aiAnalysis,
+      });
+      const pdfBase64 = doc.output('datauristring').replace(/^data:[^;]+;base64,/, '');
+
+      // Dejar listos los botones de abrir/descargar el PDF (siempre funcionan)
+      $('btn-download-success').onclick = () => openOrDownloadPDF(doc, monthLabelCap);
+      $('btn-download-pdf').onclick     = () => openOrDownloadPDF(doc, monthLabelCap);
+
+      // 5. Send email
+      setLoadingText('Enviando a ' + email + '…');
+      let emailOk = false;
+      let emailErr = '';
+      try {
+        const resp = await fetch('/api/send-report', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, pdfBase64, monthLabel: monthLabelCap }),
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) {
+          emailErr = data.error || ('Error ' + resp.status + ' al enviar el email');
+        } else {
+          emailOk = true;
+        }
+      } catch (e) {
+        emailErr = 'No se pudo conectar con el servidor de email.';
+      }
+
+      if (emailOk) {
+        $('report-success-email').textContent = email;
+        showReportState('success');
+      } else {
+        // El PDF se generó bien aunque el email fallara → ofrecer abrirlo/descargarlo
+        $('report-error-msg').textContent = emailErr + ' Pero tu PDF está listo: ábrelo aquí abajo.';
+        $('btn-download-pdf').classList.remove('hidden');
+        showReportState('error');
+      }
+
+    } catch (err) {
+      console.error('Report error:', err);
+      $('report-error-msg').textContent = err.message || 'Error desconocido. Inténtalo de nuevo.';
+      $('btn-download-pdf').classList.add('hidden');
+      showReportState('error');
+    }
+  }
+
+  function setLoadingText(t) {
+    const el = $('report-loading-text');
+    if (el) el.textContent = t;
+  }
+
+  // ── AI analysis ──────────────────────────────────────────────
+  async function getMonthlyAIAnalysis(monthLabel, expenses, incomes, categories, totalSpent, totalIncome) {
+    const catsText = Object.entries(categories)
+      .sort((a, b) => b[1] - a[1]).slice(0, 5)
+      .map(([cat, amt]) => `- ${cat}: €${amt.toFixed(2)}`).join('\n') || 'Sin gastos.';
+
+    const message =
+      `Genera un analisis mensual de mis finanzas de ${monthLabel}. ` +
+      `Responde EXACTAMENTE con este formato (sin emojis, texto plano):\n\n` +
+      `POSITIVOS:\n[2 o 3 puntos positivos concretos con los numeros reales]\n\n` +
+      `MEJORAS:\n[2 o 3 areas a mejorar con recomendaciones concretas]\n\n` +
+      `Datos: Total gastado €${totalSpent.toFixed(2)}, Total ingresos €${totalIncome.toFixed(2)}, ` +
+      `${expenses.length} gastos. Categorias:\n${catsText}`;
+
+    const context = {
+      balance:     state.balance,
+      totalSpent,
+      numExpenses: expenses.length,
+      categories,
+    };
+
+    const res = await fetch('/api/chat', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ message, context }),
+    });
+
+    if (!res.ok) throw new Error('IA no disponible');
+    const data = await res.json();
+    return data.reply || '';
+  }
+
+  // ── Chart helpers ─────────────────────────────────────────────
+  const PALETTE = [
+    '#6366f1','#8b5cf6','#ec4899','#f43f5e',
+    '#f97316','#f59e0b','#10b981','#06b6d4',
+    '#3b82f6','#a855f7',
+  ];
+
+  function hexToRgb(hex) {
+    return [
+      parseInt(hex.slice(1, 3), 16),
+      parseInt(hex.slice(3, 5), 16),
+      parseInt(hex.slice(5, 7), 16),
+    ];
+  }
+
+  function renderChartToImage(config, width, height) {
+    return new Promise((resolve, reject) => {
+      if (typeof Chart === 'undefined') { reject(new Error('Chart.js no cargado')); return; }
+      const canvas = document.createElement('canvas');
+      canvas.width  = width;
+      canvas.height = height;
+      canvas.style.cssText = 'position:absolute;left:-9999px;top:-9999px;';
+      document.body.appendChild(canvas);
+
+      const chart = new Chart(canvas.getContext('2d'), {
+        ...config,
+        options: {
+          ...(config.options || {}),
+          animation:       false,
+          responsive:      false,
+          devicePixelRatio: 1.5,
+        },
+      });
+
+      setTimeout(() => {
+        try {
+          const img = canvas.toDataURL('image/png');
+          chart.destroy();
+          document.body.removeChild(canvas);
+          resolve(img);
+        } catch (e) {
+          chart.destroy();
+          document.body.removeChild(canvas);
+          reject(e);
+        }
+      }, 150);
+    });
+  }
+
+  function renderCategoryChart(sortedCats) {
+    const top    = sortedCats.slice(0, 7);
+    const labels = top.map(([cat]) => cat.length > 14 ? cat.slice(0, 13) + '…' : cat);
+    const data   = top.map(([, amt]) => amt);
+    const colors = labels.map((_, i) => PALETTE[i % PALETTE.length]);
+
+    return renderChartToImage({
+      type: 'doughnut',
+      data: {
+        labels,
+        datasets: [{
+          data,
+          backgroundColor: colors,
+          borderWidth: 2,
+          borderColor: '#fff',
+          hoverOffset: 6,
+        }],
+      },
+      options: {
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: {
+              font: { size: 13 },
+              padding: 14,
+              usePointStyle: true,
+              pointStyleWidth: 10,
+            },
+          },
+        },
+        cutout: '58%',
+      },
+    }, 480, 340);
+  }
+
+  function renderDailyChart(expenses, month, year) {
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const labels = Array.from({ length: daysInMonth }, (_, i) => String(i + 1));
+    const data   = new Array(daysInMonth).fill(0);
+    expenses.forEach((e) => { data[new Date(e.date).getDate() - 1] += e.amount; });
+
+    return renderChartToImage({
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Gasto (€)',
+          data,
+          backgroundColor: data.map((v) => v > 0 ? 'rgba(99,102,241,0.85)' : 'rgba(99,102,241,0.12)'),
+          borderRadius: 4,
+          borderSkipped: false,
+        }],
+      },
+      options: {
+        plugins: { legend: { display: false } },
+        scales: {
+          x: {
+            grid: { display: false },
+            ticks: { font: { size: 10 }, maxRotation: 0 },
+          },
+          y: {
+            grid: { color: 'rgba(0,0,0,0.06)' },
+            ticks: { font: { size: 10 }, callback: (v) => '€' + v },
+          },
+        },
+      },
+    }, 700, 260);
+  }
+
+  function openOrDownloadPDF(doc, monthLabel) {
+    const safeName = monthLabel.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, '-');
+    const filename = 'flux-informe-' + safeName + '.pdf';
+
+    // Generar un Blob real (mucho más fiable que un data: URI, sobre todo en móvil)
+    let blob;
+    try {
+      blob = doc.output('blob');
+    } catch (_) {
+      // Fallback: reconstruir el blob desde base64
+      const base64 = doc.output('datauristring').replace(/^data:[^;]+;base64,/, '');
+      const bytes  = atob(base64);
+      const arr    = new Uint8Array(bytes.length);
+      for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+      blob = new Blob([arr], { type: 'application/pdf' });
+    }
+
+    const url = URL.createObjectURL(blob);
+
+    // Intentar abrir en pestaña nueva (funciona bien en móvil y escritorio)
+    const opened = window.open(url, '_blank');
+
+    // Si el navegador bloquea la pestaña, forzar descarga
+    if (!opened) {
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    // Liberar memoria pasado un tiempo prudencial
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  }
+
+  // ── PDF builder ───────────────────────────────────────────────
+  function buildReportPDF({ monthLabel, totalSpent, totalIncome, netBalance, sortedCats, mExp, mInc, catChartImg, dailyChartImg, aiAnalysis }) {
+    if (!window.jspdf) throw new Error('El generador de PDF no está listo. Recarga la página e inténtalo de nuevo.');
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+
+    const W   = 210;
+    const mg  = 14;
+    const cW  = W - 2 * mg;
+    let   y   = 0;
+
+    // ── helpers ────────────────────────────
+    function fill(x, yy, w, h, r, ...rgb) {
+      doc.setFillColor(...rgb);
+      r > 0 ? doc.roundedRect(x, yy, w, h, r, r, 'F') : doc.rect(x, yy, w, h, 'F');
+    }
+
+    function txt(t, x, yy, { size = 10, rgb = [31, 41, 55], align = 'left', bold = false } = {}) {
+      doc.setFontSize(size);
+      doc.setTextColor(...rgb);
+      doc.setFont('helvetica', bold ? 'bold' : 'normal');
+      const str = String(t).replace(/[-￿]/g, (c) => {
+        const code = c.charCodeAt(0);
+        if (code <= 0xFF) return c;
+        const map = { '–': '-', '—': '-', '‘': "'", '’': "'", '“': '"', '”': '"', '•': '-', '…': '...' };
+        return map[c] || '';
+      });
+      doc.text(str, x, yy, { align });
+    }
+
+    function newPageIfNeeded(needed = 20) {
+      if (y + needed > 282) {
+        doc.addPage();
+        y = 16;
+      }
+    }
+
+    // ── HEADER ────────────────────────────────────────────────
+    fill(0, 0, W, 52, 0, 55, 48, 163);
+    fill(0, 0, W, 52, 0, 79, 70, 229);
+
+    txt('Flux', mg, 19, { size: 22, rgb: [255, 255, 255], bold: true });
+    txt('Finanzas Personales', mg, 26, { size: 8, rgb: [196, 198, 255] });
+    txt('Informe Mensual', mg, 37, { size: 16, rgb: [255, 255, 255], bold: true });
+    txt(monthLabel, mg, 45, { size: 10, rgb: [196, 198, 255] });
+
+    const genDate = new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
+    txt('Generado el ' + genDate, W - mg, 45, { size: 7.5, rgb: [196, 198, 255], align: 'right' });
+
+    y = 60;
+
+    // ── SUMMARY CARDS ─────────────────────────────────────────
+    const crdW = (cW - 4) / 3;
+
+    // Ingresos (verde)
+    fill(mg, y, crdW, 24, 4, 4, 120, 87);
+    txt('INGRESOS', mg + crdW / 2, y + 7.5, { size: 6.5, rgb: [200, 255, 230], align: 'center', bold: true });
+    txt('+€' + totalIncome.toFixed(2), mg + crdW / 2, y + 16, { size: 12, rgb: [255, 255, 255], align: 'center', bold: true });
+
+    // Gastos (rojo)
+    const x2 = mg + crdW + 2;
+    fill(x2, y, crdW, 24, 4, 190, 18, 60);
+    txt('GASTOS', x2 + crdW / 2, y + 7.5, { size: 6.5, rgb: [255, 210, 218], align: 'center', bold: true });
+    txt('-€' + totalSpent.toFixed(2), x2 + crdW / 2, y + 16, { size: 12, rgb: [255, 255, 255], align: 'center', bold: true });
+
+    // Balance neto
+    const x3 = mg + 2 * (crdW + 2);
+    const isPos = netBalance >= 0;
+    fill(x3, y, crdW, 24, 4, ...(isPos ? [4, 120, 87] : [190, 18, 60]));
+    txt('BALANCE NETO', x3 + crdW / 2, y + 7.5, { size: 6.5, rgb: isPos ? [200, 255, 230] : [255, 210, 218], align: 'center', bold: true });
+    txt((isPos ? '+' : '') + '€' + netBalance.toFixed(2), x3 + crdW / 2, y + 16, { size: 12, rgb: [255, 255, 255], align: 'center', bold: true });
+
+    y += 32;
+
+    // ── CATEGORY CHART + LIST ─────────────────────────────────
+    if (catChartImg && sortedCats.length > 0) {
+      txt('GASTOS POR CATEGORIA', mg, y, { size: 7.5, rgb: [156, 163, 175], bold: true });
+      y += 4;
+
+      const chartW = 78;
+      const chartH = 66;
+      doc.addImage(catChartImg, 'PNG', mg, y, chartW, chartH);
+
+      // Category list right side
+      const lx = mg + chartW + 6;
+      const lW = cW - chartW - 6;
+      let   ly = y + 4;
+
+      sortedCats.slice(0, 7).forEach(([cat, amt], i) => {
+        const pct    = totalSpent > 0 ? (amt / totalSpent) * 100 : 0;
+        const rgb    = hexToRgb(PALETTE[i % PALETTE.length]);
+
+        doc.setFillColor(...rgb);
+        doc.circle(lx + 2, ly - 1, 1.5, 'F');
+
+        const catLabel = cat.length > 20 ? cat.slice(0, 19) + '…' : cat;
+        txt(catLabel, lx + 5.5, ly, { size: 8 });
+        txt('€' + amt.toFixed(2), lx + lW, ly, { size: 8, bold: true, align: 'right' });
+
+        const barY = ly + 1.8;
+        const barH = 2.4;
+        fill(lx, barY, lW, barH, 1.2, 243, 244, 246);
+        fill(lx, barY, Math.max(lW * pct / 100, 0.5), barH, 1.2, ...rgb);
+
+        txt(pct.toFixed(0) + '%', lx + lW, ly + 6.5, { size: 6.5, rgb: [156, 163, 175], align: 'right' });
+        ly += 10;
+      });
+
+      y += chartH + 6;
+    } else if (mExp.length === 0) {
+      fill(mg, y, cW, 18, 4, 243, 244, 246);
+      txt('Sin gastos registrados en ' + monthLabel, W / 2, y + 11, { size: 9, rgb: [156, 163, 175], align: 'center' });
+      y += 24;
+    }
+
+    // ── DAILY CHART ───────────────────────────────────────────
+    if (dailyChartImg && mExp.length > 0) {
+      newPageIfNeeded(55);
+      txt('EVOLUCION DIARIA DE GASTOS', mg, y, { size: 7.5, rgb: [156, 163, 175], bold: true });
+      y += 4;
+      const dailyH = 46;
+      doc.addImage(dailyChartImg, 'PNG', mg, y, cW, dailyH);
+      y += dailyH + 7;
+    }
+
+    // ── TOP TRANSACTIONS ──────────────────────────────────────
+    if (mExp.length > 0) {
+      newPageIfNeeded(40);
+      txt('TOP GASTOS DEL MES', mg, y, { size: 7.5, rgb: [156, 163, 175], bold: true });
+      y += 5;
+
+      const topExp = [...mExp].sort((a, b) => b.amount - a.amount).slice(0, 5);
+      topExp.forEach((e, i) => {
+        const rowY = y + i * 9;
+        newPageIfNeeded(12);
+        if (i % 2 === 0) fill(mg, rowY - 3.5, cW, 9, 2, 249, 250, 251);
+        txt((i + 1) + '.', mg + 2, rowY + 2, { size: 7, rgb: [156, 163, 175] });
+        const catLabel = e.category.length > 35 ? e.category.slice(0, 34) + '…' : e.category;
+        txt(catLabel, mg + 10, rowY + 2, { size: 8.5 });
+        const dateStr = new Date(e.date).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
+        txt(dateStr, W - mg - 28, rowY + 2, { size: 7.5, rgb: [156, 163, 175] });
+        txt('€' + e.amount.toFixed(2), W - mg, rowY + 2, { size: 9, bold: true, rgb: [244, 63, 94], align: 'right' });
+      });
+      y += topExp.length * 9 + 6;
+    }
+
+    // ── AI ANALYSIS ───────────────────────────────────────────
+    if (aiAnalysis) {
+      const cleanAI = (s) => s.replace(/[Ā-￿]/g, (c) => {
+        const map = { '–': '-', '—': '-', '‘': "'", '’': "'", '“': '"', '”': '"', '•': '-', '…': '...' };
+        return map[c] || '';
+      }).replace(/\*/g, '').trim();
+
+      const posMatch = aiAnalysis.match(/POSITIVOS:?\s*([\s\S]*?)(?=MEJORAS:|$)/i);
+      const mejMatch = aiAnalysis.match(/MEJORAS:?\s*([\s\S]*?)$/i);
+      const posText  = posMatch ? cleanAI(posMatch[1]) : '';
+      const mejText  = mejMatch ? cleanAI(mejMatch[1]) : '';
+
+      if (posText || mejText) {
+        newPageIfNeeded(20);
+        txt('ANALISIS INTELIGENTE — FLUX AI', mg, y, { size: 7.5, rgb: [156, 163, 175], bold: true });
+        y += 5;
+
+        if (posText) {
+          const lines = doc.splitTextToSize(posText, cW - 12);
+          const bH    = lines.length * 4.6 + 14;
+          newPageIfNeeded(bH + 4);
+          fill(mg, y, cW, bH, 4, 236, 253, 245);
+          fill(mg, y, 3.5, bH, 2, 16, 185, 129);
+          txt('Lo mejor de este mes', mg + 8, y + 8, { size: 9, rgb: [5, 150, 105], bold: true });
+          const subLines = doc.splitTextToSize(posText, cW - 12);
+          subLines.forEach((line, i) => {
+            txt(line, mg + 8, y + 14.5 + i * 4.6, { size: 8.5, rgb: [55, 65, 81] });
+          });
+          y += bH + 5;
+        }
+
+        if (mejText) {
+          const lines = doc.splitTextToSize(mejText, cW - 12);
+          const bH    = lines.length * 4.6 + 14;
+          newPageIfNeeded(bH + 4);
+          fill(mg, y, cW, bH, 4, 255, 247, 237);
+          fill(mg, y, 3.5, bH, 2, 245, 158, 11);
+          txt('Areas de mejora', mg + 8, y + 8, { size: 9, rgb: [180, 83, 9], bold: true });
+          const subLines = doc.splitTextToSize(mejText, cW - 12);
+          subLines.forEach((line, i) => {
+            txt(line, mg + 8, y + 14.5 + i * 4.6, { size: 8.5, rgb: [55, 65, 81] });
+          });
+          y += bH + 5;
+        }
+      }
+    }
+
+    // ── FOOTER ────────────────────────────────────────────────
+    const totalPages = doc.internal.getNumberOfPages();
+    for (let p = 1; p <= totalPages; p++) {
+      doc.setPage(p);
+      doc.setDrawColor(229, 231, 235);
+      doc.setLineWidth(0.3);
+      doc.line(mg, 287, W - mg, 287);
+      txt(
+        'Flux Finanzas Personales  ·  Informe generado automaticamente  ·  Pagina ' + p + ' de ' + totalPages,
+        W / 2, 293,
+        { size: 7, rgb: [156, 163, 175], align: 'center' },
+      );
+    }
+
+    // Devolver el documento jsPDF (de él sacamos base64 para email y blob para abrir)
+    return doc;
+  }
+
+
+  /* -----------------------------------------------------------
      9. INICIALIZACIÓN + LISTENERS
      ----------------------------------------------------------- */
   function init() {
@@ -629,6 +1172,18 @@
     $('btn-reset-confirm').addEventListener('click', confirmReset);
     $('reset-modal').addEventListener('click', e => {
       if (e.target === $('reset-modal')) closeResetModal();
+    });
+
+    // Informe mensual
+    $('btn-open-report').addEventListener('click',     openReportModal);
+    $('btn-close-modal').addEventListener('click',     closeReportModal);
+    $('modal-backdrop').addEventListener('click',      closeReportModal);
+    $('btn-generate-report').addEventListener('click', handleGenerateReport);
+    $('btn-close-success').addEventListener('click',   closeReportModal);
+    $('btn-retry-report').addEventListener('click',    () => showReportState('form'));
+    $('btn-cancel-report').addEventListener('click',   closeReportModal);
+    $('report-email').addEventListener('keydown', e => {
+      if (e.key === 'Enter') handleGenerateReport();
     });
 
     // Mostrar bienvenida si es la primera vez

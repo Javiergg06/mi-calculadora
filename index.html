@@ -41,6 +41,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" defer></script>
 </head>
 
 <body>
@@ -222,6 +224,22 @@
           </svg>
         </div>
 
+        <!-- Informe Mensual Card -->
+        <div id="btn-open-report" class="report-card">
+          <div class="report-card-avatar">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" style="width:22px;height:22px">
+              <path fill-rule="evenodd" d="M5.625 1.5H9a3.75 3.75 0 013.75 3.75v1.875c0 1.036.84 1.875 1.875 1.875H16.5a3.75 3.75 0 013.75 3.75v7.875c0 1.035-.84 1.875-1.875 1.875H5.625a1.875 1.875 0 01-1.875-1.875V3.375c0-1.036.84-1.875 1.875-1.875zm6.905 9.97a.75.75 0 00-1.06 0l-3 3a.75.75 0 101.06 1.06l1.72-1.72V18a.75.75 0 001.5 0v-4.19l1.72 1.72a.75.75 0 101.06-1.06l-3-3z" clip-rule="evenodd" />
+            </svg>
+          </div>
+          <div class="report-card-body">
+            <p class="report-card-title">Informe mensual</p>
+            <p class="report-card-sub">Recibe un PDF con estadísticas en tu email</p>
+          </div>
+          <svg class="ai-card-chevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd" />
+          </svg>
+        </div>
+
       </div><!-- /tab-scroll -->
     </section>
 
@@ -345,6 +363,84 @@
     </div>
 
   </div><!-- /app-shell -->
+
+
+  <!-- ============================================================ -->
+  <!-- MODAL — INFORME MENSUAL                                      -->
+  <!-- ============================================================ -->
+  <div id="modal-report" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-backdrop" id="modal-backdrop"></div>
+    <div class="modal-sheet">
+
+      <div class="modal-grabber"></div>
+
+      <div class="modal-head">
+        <div class="modal-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" style="width:22px;height:22px">
+            <path fill-rule="evenodd" d="M5.625 1.5H9a3.75 3.75 0 013.75 3.75v1.875c0 1.036.84 1.875 1.875 1.875H16.5a3.75 3.75 0 013.75 3.75v7.875c0 1.035-.84 1.875-1.875 1.875H5.625a1.875 1.875 0 01-1.875-1.875V3.375c0-1.036.84-1.875 1.875-1.875zm6.905 9.97a.75.75 0 00-1.06 0l-3 3a.75.75 0 101.06 1.06l1.72-1.72V18a.75.75 0 001.5 0v-4.19l1.72 1.72a.75.75 0 101.06-1.06l-3-3z" clip-rule="evenodd" />
+          </svg>
+        </div>
+        <div class="modal-head-text">
+          <h2 id="modal-title" class="modal-title">Informe mensual</h2>
+          <p class="modal-subtitle">Resumen financiero en PDF a tu email</p>
+        </div>
+        <button id="btn-close-modal" class="modal-close" aria-label="Cerrar">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:16px;height:16px">
+            <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+          </svg>
+        </button>
+      </div>
+
+      <!-- Estado: FORMULARIO -->
+      <div id="report-form">
+        <label for="report-email" class="modal-label">Tu email</label>
+        <input
+          id="report-email"
+          type="email"
+          inputmode="email"
+          autocomplete="email"
+          placeholder="tu@email.com"
+          class="modal-input"
+        />
+
+        <label for="report-month" class="modal-label" style="margin-top:16px">Mes del informe</label>
+        <select id="report-month" class="modal-select"></select>
+
+        <p class="modal-note">Se generará un PDF con estadísticas, gráficos y un análisis con IA de tus finanzas de ese mes.</p>
+
+        <button id="btn-generate-report" class="modal-cta">Generar y enviar informe</button>
+      </div>
+
+      <!-- Estado: CARGANDO -->
+      <div id="report-loading" class="hidden modal-state">
+        <div class="report-spinner"></div>
+        <p class="modal-state-title">Generando tu informe…</p>
+        <p id="report-loading-text" class="modal-state-sub">Analizando datos…</p>
+      </div>
+
+      <!-- Estado: ÉXITO -->
+      <div id="report-success" class="hidden modal-state">
+        <div class="modal-state-emoji" style="background:#E8FFF1">✅</div>
+        <p class="modal-state-title">¡Informe enviado!</p>
+        <p class="modal-state-sub">Revisa tu bandeja de entrada en</p>
+        <p id="report-success-email" class="modal-state-email"></p>
+        <button id="btn-download-success" class="modal-cta" style="margin-top:18px">También abrir el PDF</button>
+        <button id="btn-close-success" class="modal-cta-dark">Cerrar</button>
+      </div>
+
+      <!-- Estado: ERROR -->
+      <div id="report-error" class="hidden modal-state">
+        <div class="modal-state-emoji" style="background:#FFF0F0">⚠️</div>
+        <p class="modal-state-title">Algo salió mal</p>
+        <p id="report-error-msg" class="modal-state-sub"></p>
+        <button id="btn-download-pdf" class="modal-cta hidden" style="margin-top:18px">Abrir / descargar PDF</button>
+        <button id="btn-retry-report" class="modal-cta-dark">Reintentar envío</button>
+        <button id="btn-cancel-report" class="modal-cancel">Cancelar</button>
+      </div>
+
+    </div>
+  </div>
+
 
   <script src="app.js"></script>
 </body>
