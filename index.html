@@ -3,26 +3,34 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <meta name="theme-color" content="#6366f1" />
+  <meta name="theme-color" content="#1C1C1E" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Flux" />
-  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect fill='%234f46e5' width='180' height='180' rx='38'/><text x='90' y='120' font-size='100' text-anchor='middle'>⚡</text></svg>" />
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><defs><linearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' stop-color='%23141E2E'/><stop offset='100%25' stop-color='%230A84FF'/></linearGradient></defs><rect fill='url(%23g)' width='180' height='180' rx='40'/><text x='90' y='120' font-size='95' text-anchor='middle'>⚡</text></svg>" />
   <link rel="manifest" href="manifest.json" />
-  <title>Flux — Finanzas Personales</title>
+  <title>Flux — Finanzas</title>
 
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
       theme: {
         extend: {
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
           colors: {
-            brand:     '#6366f1',
-            brandDark: '#4f46e5',
-            surface:   '#f5f4fe',
-          },
-          fontFamily: {
-            sans: ['Inter', 'system-ui', 'sans-serif'],
+            ios: {
+              blue:   '#007AFF',
+              green:  '#30D158',
+              red:    '#FF3B30',
+              orange: '#FF9500',
+              purple: '#5E5CE6',
+              gray1:  '#8E8E93',
+              gray2:  '#AEAEB2',
+              gray3:  '#C7C7CC',
+              gray4:  '#D1D1D6',
+              gray5:  '#E5E5EA',
+              gray6:  '#F2F2F7',
+            },
           },
         },
       },
@@ -32,240 +40,254 @@
   <link rel="stylesheet" href="styles.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
 </head>
 
-<body class="bg-surface font-sans antialiased text-gray-900">
-  <div class="mx-auto flex min-h-screen w-full max-w-md flex-col bg-surface">
+<body>
 
+  <div class="app-shell">
 
-    <!-- ======================================================== -->
-    <!-- PÁGINA 1 — INICIO                                        -->
-    <!-- ======================================================== -->
-    <section id="page-home" class="page flex flex-1 flex-col">
+    <!-- ============================================================ -->
+    <!-- TAB 1 — INICIO (Calculator)                                  -->
+    <!-- ============================================================ -->
+    <section id="page-home" class="tab-page active">
 
-      <!-- Hero -->
-      <header class="hero-header relative overflow-hidden px-6 text-white">
-        <div class="orb orb-1"></div>
-        <div class="orb orb-2"></div>
+      <!-- Header -->
+      <header class="page-nav">
+        <div class="page-nav-title">Flux</div>
+        <div class="page-nav-badge">⚡</div>
+      </header>
 
-        <!-- Marca -->
-        <div class="relative mb-7 flex items-center gap-2.5">
-          <div class="brand-badge">⚡</div>
-          <span class="text-[10px] font-black uppercase tracking-[0.3em] text-white/60">Flux</span>
-        </div>
+      <div class="tab-scroll">
 
-        <!-- Saldo -->
-        <div class="relative">
-          <p class="field-label text-white/50 mb-2">Saldo disponible</p>
-          <div class="flex items-baseline gap-1.5">
-            <span class="text-2xl font-black text-white/50">€</span>
+        <!-- Balance hero card -->
+        <div class="balance-card">
+          <div class="balance-card-glow"></div>
+          <p class="balance-card-label">Saldo disponible</p>
+          <div class="balance-card-row">
+            <span class="balance-card-symbol">€</span>
             <input
               id="input-balance"
               type="number"
               inputmode="decimal"
               step="0.01"
               placeholder="0"
-              class="w-full bg-transparent text-[56px] leading-none font-black text-white placeholder-white/20 outline-none"
+              autocomplete="off"
+              class="balance-card-input"
             />
           </div>
-          <p class="mt-2 text-[11px] text-white/35">Actualiza cuando recibas dinero</p>
-        </div>
-      </header>
-
-      <!-- Formulario -->
-      <main class="flex flex-1 flex-col gap-3 px-5 py-5">
-
-        <!-- Selector Gasto / Ingreso -->
-        <div class="mode-toggle">
-          <button id="btn-mode-expense" class="mode-btn is-active">💸 Gasto</button>
-          <button id="btn-mode-income"  class="mode-btn">💰 Ingreso</button>
+          <p class="balance-card-hint">Toca para actualizar tu saldo</p>
         </div>
 
-        <!-- Importe -->
-        <div class="card p-5">
-          <label class="field-label">Importe</label>
-          <div class="flex items-baseline gap-2 mt-2">
-            <span class="text-2xl font-bold text-gray-200">€</span>
-            <input
-              id="input-amount"
-              type="number"
-              inputmode="decimal"
-              step="0.01"
-              min="0"
-              placeholder="0.00"
-              class="flex-1 bg-transparent text-[44px] leading-tight font-black text-gray-900 placeholder-gray-200 outline-none"
-            />
-          </div>
+        <!-- Mode toggle -->
+        <div class="seg-control">
+          <button id="btn-mode-expense" class="seg-btn seg-active">💸 Gasto</button>
+          <button id="btn-mode-income"  class="seg-btn">💰 Ingreso</button>
         </div>
 
-        <!-- Categoría -->
-        <div class="card p-5">
-          <label for="input-category" id="label-category" class="field-label">¿En qué lo has gastado?</label>
+        <!-- Amount display -->
+        <div class="amount-display-wrap">
+          <span class="amount-display-sym">€</span>
+          <span id="keypad-display-value" class="amount-display-num is-placeholder">0</span>
+        </div>
+
+        <!-- Category input -->
+        <div class="category-wrap">
+          <svg class="category-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M17.707 9.293a1 1 0 010 1.414l-7 7a1 1 0 01-1.414 0l-7-7A.997.997 0 012 10V5a3 3 0 013-3h5c.256 0 .512.098.707.293l7 7zM5 6a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+          </svg>
           <input
             id="input-category"
             type="text"
             enterkeyhint="done"
             autocomplete="off"
-            placeholder="Comida, Taxi, Ocio, Ropa…"
-            class="mt-2.5 w-full bg-transparent text-lg font-semibold text-gray-900 placeholder-gray-300 outline-none"
+            id="input-category"
+            placeholder="Categoría (ej. Comida, Taxi…)"
+            class="category-input"
           />
         </div>
 
-        <!-- Feedback -->
-        <p id="feedback-msg" class="hidden text-center text-sm font-semibold px-2"></p>
+        <!-- Numeric Keypad -->
+        <div class="keypad">
+          <button class="key" data-key="1">1</button>
+          <button class="key" data-key="2">2</button>
+          <button class="key" data-key="3">3</button>
 
-        <!-- Botón registrar -->
-        <button id="btn-register" class="btn-primary mt-1">
-          <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
-          </svg>
+          <button class="key" data-key="4">4</button>
+          <button class="key" data-key="5">5</button>
+          <button class="key" data-key="6">6</button>
+
+          <button class="key" data-key="7">7</button>
+          <button class="key" data-key="8">8</button>
+          <button class="key" data-key="9">9</button>
+
+          <button class="key key-decimal" data-key=".">
+            <span class="key-label-decimal">.</span>
+          </button>
+          <button class="key" data-key="0">0</button>
+          <button class="key key-back" data-key="⌫">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="key-icon-back">
+              <path fill-rule="evenodd" d="M2.515 10.674a1.875 1.875 0 000 2.652L8.89 19.7c.375.375.88.586 1.414.586H19.5a1.5 1.5 0 001.5-1.5v-13.5A1.5 1.5 0 0019.5 3.8h-9.196c-.534 0-1.039.211-1.414.586l-6.375 6.288zM12.53 9.22a.75.75 0 10-1.06 1.06L12.94 11.75l-1.47 1.47a.75.75 0 101.06 1.06L14 12.81l1.47 1.47a.75.75 0 101.06-1.06l-1.47-1.47 1.47-1.47a.75.75 0 10-1.06-1.06l-1.47 1.47-1.47-1.47z" clip-rule="evenodd" />
+            </svg>
+          </button>
+        </div>
+
+        <!-- CTA -->
+        <button id="btn-register" class="cta-btn">
           <span id="btn-register-text">Añadir gasto</span>
         </button>
 
-      </main>
+        <!-- Feedback -->
+        <p id="feedback-msg" class="feedback hidden"></p>
 
-      <!-- Pie -->
-      <footer class="sticky bottom-0 bg-surface/80 px-5 pb-footer pt-3 backdrop-blur-md">
-        <button id="btn-go-expenses" class="btn-dark w-full">
-          Ver historial
-          <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
-          </svg>
-        </button>
-      </footer>
+      </div><!-- /tab-scroll -->
     </section>
 
 
-    <!-- ======================================================== -->
-    <!-- PÁGINA 2 — HISTORIAL                                     -->
-    <!-- ======================================================== -->
-    <section id="page-expenses" class="page hidden flex-1 flex-col">
+    <!-- ============================================================ -->
+    <!-- TAB 2 — HISTORIAL                                            -->
+    <!-- ============================================================ -->
+    <section id="page-expenses" class="tab-page">
 
-      <header class="bg-white px-5 pb-5 shadow-sm page-header">
-
-        <!-- Nav -->
-        <div class="flex items-center gap-3 mb-5">
-          <button id="btn-back" class="icon-btn" aria-label="Volver">
-            <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-          <div>
-            <h1 class="text-xl font-black text-gray-900">Mis gastos</h1>
-            <p id="expense-count" class="text-xs text-gray-400 font-medium">0 movimientos</p>
-          </div>
-        </div>
-
-        <!-- Tarjetas resumen -->
-        <div class="grid grid-cols-2 gap-3 mb-4">
-          <div class="summary-card-green">
-            <p class="summary-label">Disponible</p>
-            <p id="summary-balance" class="summary-value">€0.00</p>
-          </div>
-          <div class="summary-card-red">
-            <p class="summary-label">Gastado</p>
-            <p id="summary-spent" class="summary-value">€0.00</p>
-          </div>
-        </div>
-
-        <!-- Barra de progreso -->
-        <div>
-          <div class="flex justify-between items-center mb-1.5">
-            <span class="field-label text-gray-400">Presupuesto consumido</span>
-            <span id="budget-pct" class="text-[10px] font-black text-gray-500">0%</span>
-          </div>
-          <div class="h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
-            <div id="budget-bar" class="h-full rounded-full transition-all duration-700" style="width:0%;background:linear-gradient(90deg,#10b981,#06b6d4)"></div>
-          </div>
-        </div>
-
+      <header class="page-nav">
+        <div class="page-nav-title">Historial</div>
+        <button id="btn-clear" class="page-nav-action">Borrar todo</button>
       </header>
 
-      <!-- Lista -->
-      <main class="flex-1 overflow-y-auto px-5 py-4">
-        <div class="mb-3 flex items-center justify-between">
-          <h3 class="section-label">Movimientos</h3>
-          <button id="btn-clear" class="text-xs font-semibold text-rose-400 transition active:opacity-60">Borrar todo</button>
+      <div class="tab-scroll">
+
+        <!-- Summary cards -->
+        <div class="summary-row">
+          <div class="sum-card sum-green">
+            <p class="sum-label">Disponible</p>
+            <p id="summary-balance" class="sum-value">€0.00</p>
+          </div>
+          <div class="sum-card sum-red">
+            <p class="sum-label">Gastado</p>
+            <p id="summary-spent" class="sum-value">€0.00</p>
+          </div>
         </div>
 
-        <ul id="expense-list" class="flex flex-col gap-2"></ul>
-
-        <div id="empty-state" class="mt-14 flex flex-col items-center gap-3 text-center">
-          <div class="flex h-20 w-20 items-center justify-center rounded-3xl bg-indigo-50 text-4xl">🧾</div>
-          <p class="font-bold text-gray-400 text-sm">Sin movimientos aún</p>
-          <p class="text-xs text-gray-300">Tus gastos aparecerán aquí</p>
+        <!-- Budget progress -->
+        <div class="budget-wrap">
+          <div class="budget-row">
+            <span class="budget-label">Presupuesto consumido</span>
+            <span id="budget-pct" class="budget-pct">0%</span>
+          </div>
+          <div class="budget-track">
+            <div id="budget-bar" class="budget-fill" style="width:0%"></div>
+          </div>
         </div>
-      </main>
 
-      <!-- Pie -->
-      <footer class="sticky bottom-0 bg-white/90 border-t border-gray-100 px-5 pb-footer pt-3 backdrop-blur-md">
-        <div class="grid grid-cols-2 gap-3">
-          <button id="btn-go-chat" class="btn-violet">
-            💬 Asistente
-          </button>
-          <button id="btn-go-home" class="btn-dark">
-            + Nuevo gasto
-          </button>
+        <!-- Section header -->
+        <div class="list-section-header">
+          <span id="expense-count" class="list-section-title">0 movimientos</span>
         </div>
-      </footer>
+
+        <!-- Movements -->
+        <ul id="expense-list" class="movements-list"></ul>
+
+        <!-- Empty state -->
+        <div id="empty-state" class="empty-state">
+          <div class="empty-icon">🧾</div>
+          <p class="empty-title">Sin movimientos</p>
+          <p class="empty-sub">Tus gastos e ingresos aparecerán aquí</p>
+        </div>
+
+        <!-- AI Card -->
+        <div id="btn-go-chat" class="ai-card">
+          <div class="ai-card-avatar">⚡</div>
+          <div class="ai-card-body">
+            <p class="ai-card-title">Flux AI</p>
+            <p class="ai-card-sub">Pídeme un consejo financiero</p>
+          </div>
+          <svg class="ai-card-chevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd" />
+          </svg>
+        </div>
+
+      </div><!-- /tab-scroll -->
     </section>
 
 
-    <!-- ======================================================== -->
-    <!-- PÁGINA 3 — CHAT                                          -->
-    <!-- ======================================================== -->
-    <section id="page-chat" class="page hidden flex-1 flex-col">
+    <!-- ============================================================ -->
+    <!-- TAB 3 — ASISTENTE IA                                         -->
+    <!-- ============================================================ -->
+    <section id="page-chat" class="tab-page">
 
-      <header class="bg-white border-b border-gray-100 px-5 pb-4 page-header">
-        <div class="flex items-center gap-3">
-          <button id="btn-back-chat" class="icon-btn" aria-label="Volver">
-            <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-          <div class="bot-avatar">⚡</div>
-          <div class="flex-1">
-            <p class="text-base font-black text-gray-900">Flux AI</p>
-            <div class="flex items-center gap-1.5">
-              <div class="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
-              <p class="text-xs text-gray-400 font-medium">Activo ahora</p>
+      <header class="page-nav">
+        <div class="chat-nav-left">
+          <div class="chat-bot-avatar">⚡</div>
+          <div>
+            <p class="page-nav-title" style="margin:0">Flux AI</p>
+            <div class="chat-online">
+              <span class="chat-online-dot"></span>
+              <span class="chat-online-text">Activo ahora</span>
             </div>
           </div>
         </div>
       </header>
 
-      <!-- Mensajes -->
-      <main class="flex-1 overflow-y-auto bg-gray-50/60 px-4 py-5">
-        <ul id="chat-messages" class="flex flex-col gap-3">
+      <div id="chat-scroll" class="chat-scroll">
+        <ul id="chat-messages" class="chat-list">
           <li class="chat-row-bot">
-            <div class="bot-avatar-sm">⚡</div>
+            <div class="chat-bot-sm">⚡</div>
             <div class="bubble-bot">
-              👋 Hola, soy <strong>Flux AI</strong>. Analizo tus gastos y te doy consejos personalizados en tiempo real. ¿En qué te ayudo?
+              👋 Hola, soy <strong>Flux AI</strong>. Analizo tus finanzas y te doy consejos personalizados. ¿En qué te ayudo hoy?
             </div>
           </li>
         </ul>
-      </main>
+      </div>
 
-      <!-- Input -->
-      <footer class="bg-white border-t border-gray-100 px-4 pb-footer pt-3">
-        <div class="flex items-center gap-2.5">
+      <footer class="chat-footer">
+        <div class="chat-input-row">
           <input
             id="chat-input"
             type="text"
             placeholder="Escribe tu pregunta…"
             class="chat-field"
           />
-          <button id="btn-send-message" class="btn-send">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+          <button id="btn-send-message" class="chat-send-btn">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="h-5 w-5">
+              <path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z" />
             </svg>
           </button>
         </div>
       </footer>
     </section>
 
-  </div>
+
+    <!-- ============================================================ -->
+    <!-- BOTTOM TAB BAR                                               -->
+    <!-- ============================================================ -->
+    <nav class="tab-bar">
+
+      <button class="tab-item tab-active" data-page="page-home">
+        <svg class="tab-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M11.47 3.84a.75.75 0 011.06 0l8.69 8.69a.75.75 0 101.06-1.06l-8.689-8.69a2.25 2.25 0 00-3.182 0l-8.69 8.69a.75.75 0 001.061 1.06l8.69-8.69z" />
+          <path d="M12 5.432l8.159 8.159c.03.03.06.058.091.086v6.198c0 1.035-.84 1.875-1.875 1.875H15a.75.75 0 01-.75-.75v-4.5a.75.75 0 00-.75-.75h-3a.75.75 0 00-.75.75V21a.75.75 0 01-.75.75H5.625a1.875 1.875 0 01-1.875-1.875v-6.198c.03-.028.061-.056.091-.086L12 5.432z" />
+        </svg>
+        <span class="tab-label">Inicio</span>
+      </button>
+
+      <button class="tab-item" data-page="page-expenses">
+        <svg class="tab-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+          <path fill-rule="evenodd" d="M5.625 1.5c-1.036 0-1.875.84-1.875 1.875v17.25c0 1.035.84 1.875 1.875 1.875h12.75c1.035 0 1.875-.84 1.875-1.875V12.75A3.75 3.75 0 0016.5 9h-1.875a1.875 1.875 0 01-1.875-1.875V5.25A3.75 3.75 0 009 1.5H5.625zM7.5 15a.75.75 0 01.75-.75h7.5a.75.75 0 010 1.5h-7.5A.75.75 0 017.5 15zm.75-6.75a.75.75 0 000 1.5H12a.75.75 0 000-1.5H8.25z" clip-rule="evenodd" />
+          <path d="M12.971 1.816A5.23 5.23 0 0114.25 5.25v1.875c0 .207.168.375.375.375H16.5a5.23 5.23 0 013.434 1.279 9.768 9.768 0 00-6.963-6.963z" />
+        </svg>
+        <span class="tab-label">Historial</span>
+      </button>
+
+      <button class="tab-item" data-page="page-chat">
+        <svg class="tab-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+          <path fill-rule="evenodd" d="M4.848 2.771A49.144 49.144 0 0112 2.25c2.43 0 4.817.178 7.152.52 1.978.292 3.348 2.024 3.348 3.97v6.02c0 1.946-1.37 3.678-3.348 3.97a48.901 48.901 0 01-3.476.383.39.39 0 00-.297.17l-2.755 4.133a.75.75 0 01-1.248 0l-2.755-4.133a.39.39 0 00-.297-.17 48.9 48.9 0 01-3.476-.384c-1.978-.29-3.348-2.024-3.348-3.97V6.741c0-1.946 1.37-3.68 3.348-3.97z" clip-rule="evenodd" />
+        </svg>
+        <span class="tab-label">Asistente</span>
+      </button>
+
+    </nav>
+
+  </div><!-- /app-shell -->
 
   <script src="app.js"></script>
 </body>
