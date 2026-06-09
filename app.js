@@ -588,7 +588,6 @@
     }
     showReportState('form');
     $('modal-report').classList.remove('hidden');
-    setTimeout(() => $('report-email').focus(), 120);
   }
 
   function closeReportModal() {
@@ -603,26 +602,15 @@
 
   // ── Main handler ─────────────────────────────────────────────
   async function handleGenerateReport() {
-    const emailInput = $('report-email');
-    const email = emailInput.value.trim();
-
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      emailInput.style.borderColor = '#f43f5e';
-      emailInput.focus();
-      setTimeout(() => { emailInput.style.borderColor = ''; }, 2000);
-      return;
-    }
-
     const [year, month] = $('report-month').value.split('-').map(Number);
-    const monthLabel = new Date(year, month, 1)
-      .toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+    const monthLabel    = new Date(year, month, 1).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
     const monthLabelCap = monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1);
 
     showReportState('loading');
-    setLoadingText('Filtrando datos del mes…');
 
     try {
-      // 1. Filter data
+      // 1. Filtrar datos del mes
+      setLoadingText('Filtrando datos del mes…');
       const mExp = state.expenses.filter((e) => {
         const d = new Date(e.date);
         return d.getMonth() === month && d.getFullYear() === year;
@@ -640,23 +628,20 @@
       mExp.forEach((e) => { cats[e.category] = (cats[e.category] || 0) + e.amount; });
       const sortedCats = Object.entries(cats).sort((a, b) => b[1] - a[1]);
 
-      // 2. AI analysis
+      // 2. Análisis IA (opcional)
       setLoadingText('Analizando con IA…');
       let aiAnalysis = null;
-      try {
-        aiAnalysis = await getMonthlyAIAnalysis(monthLabelCap, mExp, mInc, cats, totalSpent, totalIncome);
-      } catch (_) { /* AI optional */ }
+      try { aiAnalysis = await getMonthlyAIAnalysis(monthLabelCap, mExp, mInc, cats, totalSpent, totalIncome); } catch (_) {}
 
-      // 3. Charts
+      // 3. Gráficos
       setLoadingText('Generando gráficos…');
-      let catChartImg  = null;
-      let dailyChartImg = null;
+      let catChartImg = null, dailyChartImg = null;
       if (sortedCats.length > 0) {
-        try { catChartImg  = await renderCategoryChart(sortedCats); } catch (_) {}
-        try { dailyChartImg = await renderDailyChart(mExp, month, year); } catch (_) {}
+        try { catChartImg   = await renderCategoryChart(sortedCats); }        catch (_) {}
+        try { dailyChartImg = await renderDailyChart(mExp, month, year); }    catch (_) {}
       }
 
-      // 4. Build PDF
+      // 4. Generar PDF y abrirlo
       setLoadingText('Creando PDF…');
       const doc = buildReportPDF({
         monthLabel: monthLabelCap,
@@ -664,46 +649,15 @@
         sortedCats, mExp, mInc,
         catChartImg, dailyChartImg, aiAnalysis,
       });
-      const pdfBase64 = doc.output('datauristring').replace(/^data:[^;]+;base64,/, '');
 
-      // Dejar listos los botones de abrir/descargar el PDF (siempre funcionan)
+      openOrDownloadPDF(doc, monthLabelCap);
+
       $('btn-download-success').onclick = () => openOrDownloadPDF(doc, monthLabelCap);
-      $('btn-download-pdf').onclick     = () => openOrDownloadPDF(doc, monthLabelCap);
-
-      // 5. Send email
-      setLoadingText('Enviando a ' + email + '…');
-      let emailOk = false;
-      let emailErr = '';
-      try {
-        const resp = await fetch('/api/send-report', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, pdfBase64, monthLabel: monthLabelCap }),
-        });
-        const data = await resp.json().catch(() => ({}));
-        if (!resp.ok) {
-          emailErr = data.error || ('Error ' + resp.status + ' al enviar el email');
-        } else {
-          emailOk = true;
-        }
-      } catch (e) {
-        emailErr = 'No se pudo conectar con el servidor de email.';
-      }
-
-      if (emailOk) {
-        $('report-success-email').textContent = email;
-        showReportState('success');
-      } else {
-        // El PDF se generó bien aunque el email fallara → ofrecer abrirlo/descargarlo
-        $('report-error-msg').textContent = emailErr + ' Pero tu PDF está listo: ábrelo aquí abajo.';
-        $('btn-download-pdf').classList.remove('hidden');
-        showReportState('error');
-      }
+      showReportState('success');
 
     } catch (err) {
       console.error('Report error:', err);
-      $('report-error-msg').textContent = err.message || 'Error desconocido. Inténtalo de nuevo.';
-      $('btn-download-pdf').classList.add('hidden');
+      $('report-error-msg').textContent = err.message || 'Error generando el PDF. Inténtalo de nuevo.';
       showReportState('error');
     }
   }
@@ -1182,9 +1136,6 @@
     $('btn-close-success').addEventListener('click',   closeReportModal);
     $('btn-retry-report').addEventListener('click',    () => showReportState('form'));
     $('btn-cancel-report').addEventListener('click',   closeReportModal);
-    $('report-email').addEventListener('keydown', e => {
-      if (e.key === 'Enter') handleGenerateReport();
-    });
 
     // Mostrar bienvenida si es la primera vez
     maybeShowOnboarding();
