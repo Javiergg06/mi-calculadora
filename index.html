@@ -393,22 +393,12 @@
 
       <!-- Estado: FORMULARIO -->
       <div id="report-form">
-        <label for="report-email" class="modal-label">Tu email</label>
-        <input
-          id="report-email"
-          type="email"
-          inputmode="email"
-          autocomplete="email"
-          placeholder="tu@email.com"
-          class="modal-input"
-        />
-
-        <label for="report-month" class="modal-label" style="margin-top:16px">Mes del informe</label>
+        <label for="report-month" class="modal-label">Mes del informe</label>
         <select id="report-month" class="modal-select"></select>
 
         <p class="modal-note">Se generará un PDF con estadísticas, gráficos y un análisis con IA de tus finanzas de ese mes.</p>
 
-        <button id="btn-generate-report" class="modal-cta">Generar y enviar informe</button>
+        <button id="btn-generate-report" class="modal-cta">Generar PDF</button>
       </div>
 
       <!-- Estado: CARGANDO -->
@@ -421,10 +411,9 @@
       <!-- Estado: ÉXITO -->
       <div id="report-success" class="hidden modal-state">
         <div class="modal-state-emoji" style="background:#E8FFF1">✅</div>
-        <p class="modal-state-title">¡Informe enviado!</p>
-        <p class="modal-state-sub">Revisa tu bandeja de entrada en</p>
-        <p id="report-success-email" class="modal-state-email"></p>
-        <button id="btn-download-success" class="modal-cta" style="margin-top:18px">También abrir el PDF</button>
+        <p class="modal-state-title">¡PDF generado!</p>
+        <p class="modal-state-sub">Se ha abierto o descargado en tu dispositivo.</p>
+        <button id="btn-download-success" class="modal-cta" style="margin-top:18px">Abrir de nuevo</button>
         <button id="btn-close-success" class="modal-cta-dark">Cerrar</button>
       </div>
 
@@ -433,8 +422,7 @@
         <div class="modal-state-emoji" style="background:#FFF0F0">⚠️</div>
         <p class="modal-state-title">Algo salió mal</p>
         <p id="report-error-msg" class="modal-state-sub"></p>
-        <button id="btn-download-pdf" class="modal-cta hidden" style="margin-top:18px">Abrir / descargar PDF</button>
-        <button id="btn-retry-report" class="modal-cta-dark">Reintentar envío</button>
+        <button id="btn-retry-report" class="modal-cta" style="margin-top:18px">Reintentar</button>
         <button id="btn-cancel-report" class="modal-cancel">Cancelar</button>
       </div>
 
