@@ -633,26 +633,16 @@
       let aiAnalysis = null;
       try { aiAnalysis = await getMonthlyAIAnalysis(monthLabelCap, mExp, mInc, cats, totalSpent, totalIncome); } catch (_) {}
 
-      // 3. Gráficos
-      setLoadingText('Generando gráficos…');
-      let catChartImg = null, dailyChartImg = null;
-      if (sortedCats.length > 0) {
-        try { catChartImg   = await renderCategoryChart(sortedCats); }        catch (_) {}
-        try { dailyChartImg = await renderDailyChart(mExp, month, year); }    catch (_) {}
-      }
-
-      // 4. Generar PDF y abrirlo
-      setLoadingText('Creando PDF…');
-      const doc = buildReportPDF({
+      // 3. Maquetar el informe editorial (HTML) y abrirlo para imprimir / guardar como PDF
+      setLoadingText('Maquetando el informe…');
+      const reportHtml = buildEditorialReport({
         monthLabel: monthLabelCap,
         totalSpent, totalIncome, netBalance,
-        sortedCats, mExp, mInc,
-        catChartImg, dailyChartImg, aiAnalysis,
+        sortedCats, mExp, mInc, aiAnalysis,
       });
 
-      openOrDownloadPDF(doc, monthLabelCap);
-
-      $('btn-download-success').onclick = () => openOrDownloadPDF(doc, monthLabelCap);
+      openReport(reportHtml);
+      $('btn-download-success').onclick = () => openReport(reportHtml);
       showReportState('success');
 
     } catch (err) {
@@ -699,369 +689,273 @@
     return data.reply || '';
   }
 
-  // ── Chart helpers ─────────────────────────────────────────────
-  const PALETTE = [
-    '#6366f1','#8b5cf6','#ec4899','#f43f5e',
-    '#f97316','#f59e0b','#10b981','#06b6d4',
-    '#3b82f6','#a855f7',
-  ];
+  // ── Paleta editorial (UI-UX Pro Max · "Banking/Traditional Finance") ──
+  const REPORT_PALETTE = ['#0F172A','#1E3A8A','#A16207','#475569','#64748B','#94A3B8','#B45309'];
 
-  function hexToRgb(hex) {
-    return [
-      parseInt(hex.slice(1, 3), 16),
-      parseInt(hex.slice(3, 5), 16),
-      parseInt(hex.slice(5, 7), 16),
-    ];
+  // ── Generador del informe editorial (HTML para imprimir / guardar como PDF) ──
+  let lastReportHtml = '';
+
+  function openReport(html) {
+    lastReportHtml = html;
+    const win = window.open('', '_blank');
+    if (!win) {
+      $('report-error-msg').textContent = 'Permite las ventanas emergentes para abrir el informe.';
+      showReportState('error');
+      return;
+    }
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
   }
 
-  function renderChartToImage(config, width, height) {
-    return new Promise((resolve, reject) => {
-      if (typeof Chart === 'undefined') { reject(new Error('Chart.js no cargado')); return; }
-      const canvas = document.createElement('canvas');
-      canvas.width  = width;
-      canvas.height = height;
-      canvas.style.cssText = 'position:absolute;left:-9999px;top:-9999px;';
-      document.body.appendChild(canvas);
+  function buildEditorialReport({ monthLabel, totalSpent, totalIncome, netBalance, sortedCats, mExp, mInc, aiAnalysis }) {
+    const genDate = new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' });
+    const genTime = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
 
-      const chart = new Chart(canvas.getContext('2d'), {
-        ...config,
-        options: {
-          ...(config.options || {}),
-          animation:       false,
-          responsive:      false,
-          devicePixelRatio: 1.5,
-        },
-      });
+    // Movimientos del mes (gastos + ingresos) ordenados por fecha
+    const movements = [
+      ...mExp.map(e => ({ ...e, _t: 'expense' })),
+      ...mInc.map(i => ({ ...i, _t: 'income'  })),
+    ].sort((a, b) => new Date(b.date) - new Date(a.date));
 
-      setTimeout(() => {
-        try {
-          const img = canvas.toDataURL('image/png');
-          chart.destroy();
-          document.body.removeChild(canvas);
-          resolve(img);
-        } catch (e) {
-          chart.destroy();
-          document.body.removeChild(canvas);
-          reject(e);
-        }
-      }, 150);
-    });
-  }
+    // ── Desglose por categoría (barras editoriales en CSS) ──
+    const catBlock = sortedCats.length === 0
+      ? `<p class="muted-note">Sin gastos registrados en ${escapeHtml(monthLabel)}.</p>`
+      : sortedCats.slice(0, 8).map(([cat, amt], i) => {
+          const pct = totalSpent > 0 ? (amt / totalSpent) * 100 : 0;
+          const color = REPORT_PALETTE[i % REPORT_PALETTE.length];
+          return `
+            <div class="cat-row">
+              <div class="cat-row-head">
+                <span class="cat-dot" style="background:${color}"></span>
+                <span class="cat-label">${escapeHtml(cat)}</span>
+                <span class="cat-amt">€${amt.toFixed(2)}</span>
+              </div>
+              <div class="cat-track">
+                <div class="cat-bar" style="width:${pct.toFixed(1)}%;background:${color}"></div>
+              </div>
+              <span class="cat-pct">${pct.toFixed(0)}% del gasto</span>
+            </div>`;
+        }).join('');
 
-  function renderCategoryChart(sortedCats) {
-    const top    = sortedCats.slice(0, 7);
-    const labels = top.map(([cat]) => cat.length > 14 ? cat.slice(0, 13) + '…' : cat);
-    const data   = top.map(([, amt]) => amt);
-    const colors = labels.map((_, i) => PALETTE[i % PALETTE.length]);
+    // ── Tabla de movimientos ──
+    const rows = movements.length === 0
+      ? `<tr><td colspan="3" class="empty-row">No hay movimientos en este mes.</td></tr>`
+      : movements.map(m => {
+          const isIncome = m._t === 'income';
+          const label = isIncome ? (m.concept || 'Ingreso') : m.category;
+          const d = new Date(m.date).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
+          return `
+            <tr>
+              <td class="cell-cat">
+                <span class="cat-name">${escapeHtml(label)}</span>
+                <span class="cat-type">${isIncome ? 'Ingreso' : 'Gasto'}</span>
+              </td>
+              <td class="cell-date">${d}</td>
+              <td class="cell-amount ${isIncome ? 'amt-pos' : 'amt-neg'}">${isIncome ? '+' : '−'} €${m.amount.toFixed(2)}</td>
+            </tr>`;
+        }).join('');
 
-    return renderChartToImage({
-      type: 'doughnut',
-      data: {
-        labels,
-        datasets: [{
-          data,
-          backgroundColor: colors,
-          borderWidth: 2,
-          borderColor: '#fff',
-          hoverOffset: 6,
-        }],
-      },
-      options: {
-        plugins: {
-          legend: {
-            position: 'bottom',
-            labels: {
-              font: { size: 13 },
-              padding: 14,
-              usePointStyle: true,
-              pointStyleWidth: 10,
-            },
-          },
-        },
-        cutout: '58%',
-      },
-    }, 480, 340);
-  }
-
-  function renderDailyChart(expenses, month, year) {
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const labels = Array.from({ length: daysInMonth }, (_, i) => String(i + 1));
-    const data   = new Array(daysInMonth).fill(0);
-    expenses.forEach((e) => { data[new Date(e.date).getDate() - 1] += e.amount; });
-
-    return renderChartToImage({
-      type: 'bar',
-      data: {
-        labels,
-        datasets: [{
-          label: 'Gasto (€)',
-          data,
-          backgroundColor: data.map((v) => v > 0 ? 'rgba(99,102,241,0.85)' : 'rgba(99,102,241,0.12)'),
-          borderRadius: 4,
-          borderSkipped: false,
-        }],
-      },
-      options: {
-        plugins: { legend: { display: false } },
-        scales: {
-          x: {
-            grid: { display: false },
-            ticks: { font: { size: 10 }, maxRotation: 0 },
-          },
-          y: {
-            grid: { color: 'rgba(0,0,0,0.06)' },
-            ticks: { font: { size: 10 }, callback: (v) => '€' + v },
-          },
-        },
-      },
-    }, 700, 260);
-  }
-
-  function openOrDownloadPDF(doc, monthLabel) {
-    const safeName = monthLabel.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, '-');
-    const filename = 'flux-informe-' + safeName + '.pdf';
-
-    // Generar un Blob real (mucho más fiable que un data: URI, sobre todo en móvil)
-    let blob;
-    try {
-      blob = doc.output('blob');
-    } catch (_) {
-      // Fallback: reconstruir el blob desde base64
-      const base64 = doc.output('datauristring').replace(/^data:[^;]+;base64,/, '');
-      const bytes  = atob(base64);
-      const arr    = new Uint8Array(bytes.length);
-      for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
-      blob = new Blob([arr], { type: 'application/pdf' });
-    }
-
-    const url = URL.createObjectURL(blob);
-
-    // Intentar abrir en pestaña nueva (funciona bien en móvil y escritorio)
-    const opened = window.open(url, '_blank');
-
-    // Si el navegador bloquea la pestaña, forzar descarga
-    if (!opened) {
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
-
-    // Liberar memoria pasado un tiempo prudencial
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
-  }
-
-  // ── PDF builder ───────────────────────────────────────────────
-  function buildReportPDF({ monthLabel, totalSpent, totalIncome, netBalance, sortedCats, mExp, mInc, catChartImg, dailyChartImg, aiAnalysis }) {
-    if (!window.jspdf) throw new Error('El generador de PDF no está listo. Recarga la página e inténtalo de nuevo.');
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
-
-    const W   = 210;
-    const mg  = 14;
-    const cW  = W - 2 * mg;
-    let   y   = 0;
-
-    // ── helpers ────────────────────────────
-    function fill(x, yy, w, h, r, ...rgb) {
-      doc.setFillColor(...rgb);
-      r > 0 ? doc.roundedRect(x, yy, w, h, r, r, 'F') : doc.rect(x, yy, w, h, 'F');
-    }
-
-    function txt(t, x, yy, { size = 10, rgb = [31, 41, 55], align = 'left', bold = false } = {}) {
-      doc.setFontSize(size);
-      doc.setTextColor(...rgb);
-      doc.setFont('helvetica', bold ? 'bold' : 'normal');
-      const str = String(t).replace(/[-￿]/g, (c) => {
-        const code = c.charCodeAt(0);
-        if (code <= 0xFF) return c;
-        const map = { '–': '-', '—': '-', '‘': "'", '’': "'", '“': '"', '”': '"', '•': '-', '…': '...' };
-        return map[c] || '';
-      });
-      doc.text(str, x, yy, { align });
-    }
-
-    function newPageIfNeeded(needed = 20) {
-      if (y + needed > 282) {
-        doc.addPage();
-        y = 16;
-      }
-    }
-
-    // ── HEADER ────────────────────────────────────────────────
-    fill(0, 0, W, 52, 0, 55, 48, 163);
-    fill(0, 0, W, 52, 0, 79, 70, 229);
-
-    txt('Flux', mg, 19, { size: 22, rgb: [255, 255, 255], bold: true });
-    txt('Finanzas Personales', mg, 26, { size: 8, rgb: [196, 198, 255] });
-    txt('Informe Mensual', mg, 37, { size: 16, rgb: [255, 255, 255], bold: true });
-    txt(monthLabel, mg, 45, { size: 10, rgb: [196, 198, 255] });
-
-    const genDate = new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
-    txt('Generado el ' + genDate, W - mg, 45, { size: 7.5, rgb: [196, 198, 255], align: 'right' });
-
-    y = 60;
-
-    // ── SUMMARY CARDS ─────────────────────────────────────────
-    const crdW = (cW - 4) / 3;
-
-    // Ingresos (verde)
-    fill(mg, y, crdW, 24, 4, 4, 120, 87);
-    txt('INGRESOS', mg + crdW / 2, y + 7.5, { size: 6.5, rgb: [200, 255, 230], align: 'center', bold: true });
-    txt('+€' + totalIncome.toFixed(2), mg + crdW / 2, y + 16, { size: 12, rgb: [255, 255, 255], align: 'center', bold: true });
-
-    // Gastos (rojo)
-    const x2 = mg + crdW + 2;
-    fill(x2, y, crdW, 24, 4, 190, 18, 60);
-    txt('GASTOS', x2 + crdW / 2, y + 7.5, { size: 6.5, rgb: [255, 210, 218], align: 'center', bold: true });
-    txt('-€' + totalSpent.toFixed(2), x2 + crdW / 2, y + 16, { size: 12, rgb: [255, 255, 255], align: 'center', bold: true });
-
-    // Balance neto
-    const x3 = mg + 2 * (crdW + 2);
-    const isPos = netBalance >= 0;
-    fill(x3, y, crdW, 24, 4, ...(isPos ? [4, 120, 87] : [190, 18, 60]));
-    txt('BALANCE NETO', x3 + crdW / 2, y + 7.5, { size: 6.5, rgb: isPos ? [200, 255, 230] : [255, 210, 218], align: 'center', bold: true });
-    txt((isPos ? '+' : '') + '€' + netBalance.toFixed(2), x3 + crdW / 2, y + 16, { size: 12, rgb: [255, 255, 255], align: 'center', bold: true });
-
-    y += 32;
-
-    // ── CATEGORY CHART + LIST ─────────────────────────────────
-    if (catChartImg && sortedCats.length > 0) {
-      txt('GASTOS POR CATEGORIA', mg, y, { size: 7.5, rgb: [156, 163, 175], bold: true });
-      y += 4;
-
-      const chartW = 78;
-      const chartH = 66;
-      doc.addImage(catChartImg, 'PNG', mg, y, chartW, chartH);
-
-      // Category list right side
-      const lx = mg + chartW + 6;
-      const lW = cW - chartW - 6;
-      let   ly = y + 4;
-
-      sortedCats.slice(0, 7).forEach(([cat, amt], i) => {
-        const pct    = totalSpent > 0 ? (amt / totalSpent) * 100 : 0;
-        const rgb    = hexToRgb(PALETTE[i % PALETTE.length]);
-
-        doc.setFillColor(...rgb);
-        doc.circle(lx + 2, ly - 1, 1.5, 'F');
-
-        const catLabel = cat.length > 20 ? cat.slice(0, 19) + '…' : cat;
-        txt(catLabel, lx + 5.5, ly, { size: 8 });
-        txt('€' + amt.toFixed(2), lx + lW, ly, { size: 8, bold: true, align: 'right' });
-
-        const barY = ly + 1.8;
-        const barH = 2.4;
-        fill(lx, barY, lW, barH, 1.2, 243, 244, 246);
-        fill(lx, barY, Math.max(lW * pct / 100, 0.5), barH, 1.2, ...rgb);
-
-        txt(pct.toFixed(0) + '%', lx + lW, ly + 6.5, { size: 6.5, rgb: [156, 163, 175], align: 'right' });
-        ly += 10;
-      });
-
-      y += chartH + 6;
-    } else if (mExp.length === 0) {
-      fill(mg, y, cW, 18, 4, 243, 244, 246);
-      txt('Sin gastos registrados en ' + monthLabel, W / 2, y + 11, { size: 9, rgb: [156, 163, 175], align: 'center' });
-      y += 24;
-    }
-
-    // ── DAILY CHART ───────────────────────────────────────────
-    if (dailyChartImg && mExp.length > 0) {
-      newPageIfNeeded(55);
-      txt('EVOLUCION DIARIA DE GASTOS', mg, y, { size: 7.5, rgb: [156, 163, 175], bold: true });
-      y += 4;
-      const dailyH = 46;
-      doc.addImage(dailyChartImg, 'PNG', mg, y, cW, dailyH);
-      y += dailyH + 7;
-    }
-
-    // ── TOP TRANSACTIONS ──────────────────────────────────────
-    if (mExp.length > 0) {
-      newPageIfNeeded(40);
-      txt('TOP GASTOS DEL MES', mg, y, { size: 7.5, rgb: [156, 163, 175], bold: true });
-      y += 5;
-
-      const topExp = [...mExp].sort((a, b) => b.amount - a.amount).slice(0, 5);
-      topExp.forEach((e, i) => {
-        const rowY = y + i * 9;
-        newPageIfNeeded(12);
-        if (i % 2 === 0) fill(mg, rowY - 3.5, cW, 9, 2, 249, 250, 251);
-        txt((i + 1) + '.', mg + 2, rowY + 2, { size: 7, rgb: [156, 163, 175] });
-        const catLabel = e.category.length > 35 ? e.category.slice(0, 34) + '…' : e.category;
-        txt(catLabel, mg + 10, rowY + 2, { size: 8.5 });
-        const dateStr = new Date(e.date).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
-        txt(dateStr, W - mg - 28, rowY + 2, { size: 7.5, rgb: [156, 163, 175] });
-        txt('€' + e.amount.toFixed(2), W - mg, rowY + 2, { size: 9, bold: true, rgb: [244, 63, 94], align: 'right' });
-      });
-      y += topExp.length * 9 + 6;
-    }
-
-    // ── AI ANALYSIS ───────────────────────────────────────────
+    // ── Bloque de análisis IA (POSITIVOS / MEJORAS) ──
+    let aiBlock = '';
+    const cleanAI = (s) => (s || '').replace(/\*/g, '').trim();
     if (aiAnalysis) {
-      const cleanAI = (s) => s.replace(/[Ā-￿]/g, (c) => {
-        const map = { '–': '-', '—': '-', '‘': "'", '’': "'", '“': '"', '”': '"', '•': '-', '…': '...' };
-        return map[c] || '';
-      }).replace(/\*/g, '').trim();
-
       const posMatch = aiAnalysis.match(/POSITIVOS:?\s*([\s\S]*?)(?=MEJORAS:|$)/i);
       const mejMatch = aiAnalysis.match(/MEJORAS:?\s*([\s\S]*?)$/i);
       const posText  = posMatch ? cleanAI(posMatch[1]) : '';
       const mejText  = mejMatch ? cleanAI(mejMatch[1]) : '';
-
-      if (posText || mejText) {
-        newPageIfNeeded(20);
-        txt('ANALISIS INTELIGENTE — FLUX AI', mg, y, { size: 7.5, rgb: [156, 163, 175], bold: true });
-        y += 5;
-
-        if (posText) {
-          const lines = doc.splitTextToSize(posText, cW - 12);
-          const bH    = lines.length * 4.6 + 14;
-          newPageIfNeeded(bH + 4);
-          fill(mg, y, cW, bH, 4, 236, 253, 245);
-          fill(mg, y, 3.5, bH, 2, 16, 185, 129);
-          txt('Lo mejor de este mes', mg + 8, y + 8, { size: 9, rgb: [5, 150, 105], bold: true });
-          const subLines = doc.splitTextToSize(posText, cW - 12);
-          subLines.forEach((line, i) => {
-            txt(line, mg + 8, y + 14.5 + i * 4.6, { size: 8.5, rgb: [55, 65, 81] });
-          });
-          y += bH + 5;
-        }
-
-        if (mejText) {
-          const lines = doc.splitTextToSize(mejText, cW - 12);
-          const bH    = lines.length * 4.6 + 14;
-          newPageIfNeeded(bH + 4);
-          fill(mg, y, cW, bH, 4, 255, 247, 237);
-          fill(mg, y, 3.5, bH, 2, 245, 158, 11);
-          txt('Areas de mejora', mg + 8, y + 8, { size: 9, rgb: [180, 83, 9], bold: true });
-          const subLines = doc.splitTextToSize(mejText, cW - 12);
-          subLines.forEach((line, i) => {
-            txt(line, mg + 8, y + 14.5 + i * 4.6, { size: 8.5, rgb: [55, 65, 81] });
-          });
-          y += bH + 5;
-        }
+      if (posText) {
+        aiBlock += `
+          <div class="ai-card ai-card-pos">
+            <p class="ai-card-cap">Lo mejor de este mes</p>
+            <p class="ai-card-text">${escapeHtml(posText)}</p>
+          </div>`;
+      }
+      if (mejText) {
+        aiBlock += `
+          <div class="ai-card ai-card-mej">
+            <p class="ai-card-cap">Áreas de mejora</p>
+            <p class="ai-card-text">${escapeHtml(mejText)}</p>
+          </div>`;
       }
     }
-
-    // ── FOOTER ────────────────────────────────────────────────
-    const totalPages = doc.internal.getNumberOfPages();
-    for (let p = 1; p <= totalPages; p++) {
-      doc.setPage(p);
-      doc.setDrawColor(229, 231, 235);
-      doc.setLineWidth(0.3);
-      doc.line(mg, 287, W - mg, 287);
-      txt(
-        'Flux Finanzas Personales  ·  Informe generado automaticamente  ·  Pagina ' + p + ' de ' + totalPages,
-        W / 2, 293,
-        { size: 7, rgb: [156, 163, 175], align: 'center' },
-      );
+    if (!aiBlock) {
+      // Sin IA disponible → consejo local contextual
+      const advice = generateSmartReply('consejo para ahorrar');
+      aiBlock = `
+        <div class="ai-card ai-card-pos">
+          <p class="ai-card-cap">Consejo de ahorro</p>
+          <p class="ai-card-text">${escapeHtml(advice)}</p>
+        </div>`;
     }
 
-    // Devolver el documento jsPDF (de él sacamos base64 para email y blob para abrir)
-    return doc;
+    const netPos = netBalance >= 0;
+
+    return `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Informe Mensual — ${escapeHtml(monthLabel)} — Flux</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy:#0F172A; --navy-2:#1E3A8A; --gold:#A16207; --muted:#64748B;
+    --muted-2:#94A3B8; --border:#E2E8F0; --bg:#FFFFFF; --bg-soft:#F8FAFC;
+    --green:#047857; --red:#B91C1C;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  @page{ size:A4; margin:18mm 16mm 20mm; }
+  html{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  body{ font-family:'Inter',sans-serif; color:var(--navy); background:var(--bg); font-size:11px; line-height:1.5; }
+
+  .report-head{ display:flex; justify-content:space-between; align-items:flex-start; padding-bottom:20px; border-bottom:2px solid var(--navy); margin-bottom:28px; }
+  .brand-row{ display:flex; align-items:center; gap:8px; margin-bottom:14px; }
+  .brand-mark{ width:26px; height:26px; border-radius:7px; background:linear-gradient(145deg,#0F172A,#1E3A8A); color:#fff; display:flex; align-items:center; justify-content:center; font-size:13px; }
+  .brand-name{ font-size:11px; font-weight:700; letter-spacing:0.22em; text-transform:uppercase; color:var(--muted); }
+  .report-eyebrow{ font-family:'Inter',sans-serif; font-size:10px; font-weight:600; letter-spacing:0.16em; text-transform:uppercase; color:var(--gold); margin-bottom:4px; }
+  .report-title{ font-family:'Playfair Display',serif; font-size:34px; font-weight:700; letter-spacing:-0.5px; line-height:1.05; color:var(--navy); }
+  .report-meta{ text-align:right; font-size:10px; color:var(--muted); line-height:1.7; padding-top:4px; }
+  .report-meta strong{ display:block; font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.1em; color:var(--muted-2); margin-bottom:2px; }
+
+  .summary{ display:flex; gap:14px; margin-bottom:34px; }
+  .sum-box{ flex:1; border:1px solid var(--border); border-radius:14px; padding:18px 20px; background:var(--bg-soft); }
+  .sum-box.feature{ background:linear-gradient(150deg,#0F172A,#1E3A8A); border:none; color:#fff; }
+  .sum-cap{ font-size:9px; font-weight:600; text-transform:uppercase; letter-spacing:0.14em; color:var(--muted); margin-bottom:8px; }
+  .sum-box.feature .sum-cap{ color:rgba(255,255,255,0.6); }
+  .sum-num{ font-family:'Playfair Display',serif; font-size:24px; font-weight:600; letter-spacing:-0.5px; }
+  .sum-box.feature .sum-num{ color:#fff; }
+  .sum-sub{ margin-top:4px; font-size:9.5px; color:var(--muted); }
+  .sum-box.feature .sum-sub{ color:rgba(255,255,255,0.55); }
+  .accent-bar{ height:3px; width:32px; background:var(--gold); border-radius:2px; margin-top:12px; }
+
+  .section-cap{ font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.16em; color:var(--gold); margin-bottom:14px; }
+  .section{ margin-bottom:30px; break-inside:avoid; }
+
+  .cat-row{ margin-bottom:13px; break-inside:avoid; }
+  .cat-row-head{ display:flex; align-items:center; gap:7px; margin-bottom:5px; }
+  .cat-dot{ width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+  .cat-label{ font-size:11px; font-weight:600; color:var(--navy); flex:1; }
+  .cat-amt{ font-size:11px; font-weight:700; color:var(--navy); font-variant-numeric:tabular-nums; }
+  .cat-track{ height:4px; background:#EEF2F7; border-radius:3px; overflow:hidden; }
+  .cat-bar{ height:100%; border-radius:3px; }
+  .cat-pct{ display:block; margin-top:3px; font-size:8.5px; color:var(--muted-2); }
+  .muted-note{ font-size:11px; color:var(--muted-2); font-style:italic; padding:8px 0; }
+
+  table{ width:100%; border-collapse:collapse; }
+  thead th{ font-size:8.5px; font-weight:600; text-transform:uppercase; letter-spacing:0.12em; color:var(--muted-2); text-align:left; padding:0 0 8px; border-bottom:1px solid var(--border); }
+  thead th.th-date,thead th.th-amount{ text-align:right; }
+  tbody tr{ break-inside:avoid; }
+  tbody td{ padding:10px 0; border-bottom:0.5px solid var(--border); vertical-align:middle; }
+  .cell-cat{ display:flex; flex-direction:column; }
+  .cat-name{ font-size:11.5px; font-weight:600; color:var(--navy); }
+  .cat-type{ font-size:8.5px; font-weight:500; text-transform:uppercase; letter-spacing:0.08em; color:var(--muted-2); margin-top:1px; }
+  .cell-date{ text-align:right; font-size:10px; color:var(--muted); white-space:nowrap; padding-right:18px; }
+  .cell-amount{ text-align:right; font-size:12px; font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .amt-neg{ color:var(--red); } .amt-pos{ color:var(--green); }
+  .empty-row{ padding:24px 0; text-align:center; color:var(--muted-2); font-style:italic; }
+
+  .ai-section{ margin-top:30px; break-inside:avoid; }
+  .ai-head{ display:flex; align-items:center; gap:9px; margin-bottom:14px; }
+  .ai-badge{ width:26px; height:26px; border-radius:8px; background:linear-gradient(145deg,#0F172A,#1E3A8A); color:#fff; display:flex; align-items:center; justify-content:center; font-size:13px; }
+  .ai-title{ font-size:12px; font-weight:700; color:var(--navy); }
+  .ai-sub{ font-size:8.5px; font-weight:500; text-transform:uppercase; letter-spacing:0.12em; color:var(--gold); }
+  .ai-card{ border:1px solid var(--border); border-radius:14px; background:var(--bg-soft); padding:18px 20px; margin-bottom:12px; break-inside:avoid; position:relative; overflow:hidden; }
+  .ai-card::before{ content:''; position:absolute; left:0; top:0; bottom:0; width:4px; }
+  .ai-card-pos::before{ background:var(--green); }
+  .ai-card-mej::before{ background:var(--gold); }
+  .ai-card-cap{ font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:7px; }
+  .ai-card-pos .ai-card-cap{ color:var(--green); }
+  .ai-card-mej .ai-card-cap{ color:var(--gold); }
+  .ai-card-text{ font-size:11px; line-height:1.65; color:var(--navy); white-space:pre-wrap; }
+
+  .report-foot{ margin-top:30px; padding-top:14px; border-top:1px solid var(--border); display:flex; justify-content:space-between; font-size:8.5px; color:var(--muted-2); letter-spacing:0.04em; }
+</style>
+</head>
+<body>
+
+  <header class="report-head">
+    <div>
+      <div class="brand-row">
+        <div class="brand-mark">⚡</div>
+        <span class="brand-name">Flux · Finanzas</span>
+      </div>
+      <p class="report-eyebrow">Informe mensual</p>
+      <h1 class="report-title">${escapeHtml(monthLabel)}</h1>
+    </div>
+    <div class="report-meta">
+      <strong>Generado</strong>
+      ${genDate}<br>${genTime}
+    </div>
+  </header>
+
+  <section class="summary">
+    <div class="sum-box feature">
+      <p class="sum-cap">Balance Neto</p>
+      <p class="sum-num">${netPos ? '+' : '−'}€${Math.abs(netBalance).toFixed(2)}</p>
+      <p class="sum-sub">${netPos ? 'Has ahorrado este mes' : 'Has gastado de más'}</p>
+    </div>
+    <div class="sum-box">
+      <p class="sum-cap">Ingresos</p>
+      <p class="sum-num" style="color:var(--green)">+€${totalIncome.toFixed(2)}</p>
+      <p class="sum-sub">${mInc.length} ingreso${mInc.length !== 1 ? 's' : ''}</p>
+      <div class="accent-bar"></div>
+    </div>
+    <div class="sum-box">
+      <p class="sum-cap">Gastos</p>
+      <p class="sum-num" style="color:var(--red)">−€${totalSpent.toFixed(2)}</p>
+      <p class="sum-sub">${mExp.length} gasto${mExp.length !== 1 ? 's' : ''}</p>
+      <div class="accent-bar"></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <p class="section-cap">Gastos por categoría</p>
+    ${catBlock}
+  </section>
+
+  <section class="section">
+    <p class="section-cap">Detalle de movimientos</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Concepto</th>
+          <th class="th-date">Fecha</th>
+          <th class="th-amount">Importe</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </section>
+
+  <section class="ai-section">
+    <div class="ai-head">
+      <div class="ai-badge">⚡</div>
+      <div>
+        <div class="ai-title">Flux AI</div>
+        <div class="ai-sub">Análisis inteligente</div>
+      </div>
+    </div>
+    ${aiBlock}
+  </section>
+
+  <footer class="report-foot">
+    <span>Flux · Generado localmente en tu dispositivo</span>
+    <span>Documento confidencial</span>
+  </footer>
+
+  <script>
+    window.addEventListener('load', function () {
+      if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(function () { setTimeout(function(){ window.print(); }, 250); });
+      } else {
+        setTimeout(function(){ window.print(); }, 600);
+      }
+    });
+  <\/script>
+</body>
+</html>`;
   }
 
 
