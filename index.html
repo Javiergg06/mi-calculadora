@@ -54,11 +54,28 @@
 
       <!-- Header -->
       <header class="page-nav">
-        <div class="page-nav-title">Flux</div>
-        <div class="page-nav-badge">⚡</div>
+        <div class="nav-brand">
+          <div class="page-nav-badge">⚡</div>
+          <div class="page-nav-title">Flux</div>
+        </div>
+        <button id="btn-reset" class="reset-btn" aria-label="Reiniciar">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="reset-icon">
+            <path fill-rule="evenodd" d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.31.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.39zm1.23-3.723a.75.75 0 00.219-.53V2.929a.75.75 0 00-1.5 0V5.36l-.31-.31A7 7 0 003.239 8.188a.75.75 0 101.448.389A5.5 5.5 0 0113.89 6.11l.311.31h-2.432a.75.75 0 000 1.5h4.243a.75.75 0 00.53-.219z" clip-rule="evenodd" />
+          </svg>
+          <span>Reiniciar</span>
+        </button>
       </header>
 
       <div class="tab-scroll">
+
+        <!-- Consejo financiero del día -->
+        <div id="tip-banner" class="tip-banner">
+          <div class="tip-icon">💡</div>
+          <div class="tip-body">
+            <p class="tip-label">Consejo del día</p>
+            <p id="tip-text" class="tip-text">Cargando…</p>
+          </div>
+        </div>
 
         <!-- Balance hero card -->
         <div class="balance-card">
@@ -101,7 +118,6 @@
             type="text"
             enterkeyhint="done"
             autocomplete="off"
-            id="input-category"
             placeholder="Categoría (ej. Comida, Taxi…)"
             class="category-input"
           />
@@ -286,6 +302,47 @@
       </button>
 
     </nav>
+
+    <!-- ============================================================ -->
+    <!-- ONBOARDING — Pantalla de bienvenida                          -->
+    <!-- ============================================================ -->
+    <div id="onboarding" class="onboarding hidden">
+      <div class="onboard-card">
+        <div class="onboard-logo">⚡</div>
+        <h1 class="onboard-title">Bienvenido a Flux</h1>
+        <p class="onboard-sub">Tu gestor de finanzas personal, simple y privado. Para empezar, dime cuánto dinero tienes ahora mismo.</p>
+
+        <label class="onboard-label">¿Cuál es tu saldo inicial?</label>
+        <div class="onboard-input-row">
+          <span class="onboard-sym">€</span>
+          <input
+            id="onboard-balance"
+            type="number"
+            inputmode="decimal"
+            step="0.01"
+            placeholder="0.00"
+            autocomplete="off"
+            class="onboard-input"
+          />
+        </div>
+
+        <button id="btn-onboard-start" class="onboard-btn">Empezar</button>
+        <p class="onboard-foot">Tus datos se guardan solo en este dispositivo 🔒</p>
+      </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- MODAL — Confirmar reinicio                                   -->
+    <!-- ============================================================ -->
+    <div id="reset-modal" class="reset-modal hidden">
+      <div class="reset-sheet">
+        <div class="reset-sheet-icon">🔄</div>
+        <h2 class="reset-sheet-title">¿Reiniciar todo?</h2>
+        <p class="reset-sheet-sub">Se borrará tu saldo, todos los gastos y todos los ingresos. Esta acción no se puede deshacer.</p>
+        <button id="btn-reset-confirm" class="reset-sheet-confirm">Sí, reiniciar todo</button>
+        <button id="btn-reset-cancel" class="reset-sheet-cancel">Cancelar</button>
+      </div>
+    </div>
 
   </div><!-- /app-shell -->
 

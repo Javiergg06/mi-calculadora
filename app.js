@@ -9,10 +9,27 @@
      1. ESTADO + PERSISTENCIA
      ----------------------------------------------------------- */
   const KEYS = {
-    balance:  'fx_balance',
-    expenses: 'fx_expenses',
-    incomes:  'fx_incomes',
+    balance:   'fx_balance',
+    expenses:  'fx_expenses',
+    incomes:   'fx_incomes',
+    onboarded: 'fx_onboarded',
   };
+
+  /* Consejos financieros que rotan en la pantalla de inicio */
+  const TIPS = [
+    'Apunta cada gasto el mismo día. Lo que no se mide, no se controla.',
+    'Antes de una compra grande, espera 24h. Muchas veces el impulso desaparece.',
+    'Intenta ahorrar al menos el 10% de cada ingreso que entre.',
+    'Revisa tus suscripciones: las pequeñas cuotas mensuales suman mucho al año.',
+    'Llevar el dinero en efectivo te hace gastar menos que con tarjeta.',
+    'Fija un límite de gasto diario y respétalo. Tu yo del futuro lo agradecerá.',
+    'Los cafés y caprichos diarios parecen poco, pero son cientos de euros al año.',
+    'Ahorrar no es gastar menos en todo, es gastar mejor en lo que importa.',
+    'Si gastas menos de lo que ingresas, ya vas por buen camino. 💪',
+    'Pon nombre a tus ahorros: un objetivo concreto motiva más que ahorrar "por ahorrar".',
+    'Compara precios antes de comprar online. Dos minutos pueden ahorrarte mucho.',
+    'Cada ingreso extra (Bizum, devolución…) es para ahorrar, no para gastar más.',
+  ];
 
   const state = {
     balance:  0,
@@ -242,6 +259,81 @@
   function renderAll() {
     renderBalance();
     renderMovements();
+    renderTip();
+  }
+
+  /* -----------------------------------------------------------
+     5b. CONSEJO FINANCIERO (Tip del día / contextual)
+     ----------------------------------------------------------- */
+  function renderTip() {
+    const el = $('tip-text');
+    if (!el) return;
+
+    const spent = getTotalSpent();
+    const total = state.balance + spent;
+    const pct   = total > 0 ? (spent / total) * 100 : 0;
+
+    // Consejos contextuales según la situación del usuario
+    let tip;
+    if (state.expenses.length === 0 && state.incomes.length === 0) {
+      tip = '¡Bienvenido! Empieza registrando tu primer gasto o ingreso para ver tu progreso.';
+    } else if (pct > 85) {
+      tip = '⚠️ Has consumido más del 85% de tu presupuesto. Frena los gastos no esenciales.';
+    } else if (pct > 60) {
+      tip = 'Vas por más de la mitad del presupuesto. Buen momento para moderar el ritmo.';
+    } else {
+      // Tip rotativo según el día del año (estable durante el día)
+      const dayIndex = Math.floor(Date.now() / 86400000) % TIPS.length;
+      tip = TIPS[dayIndex];
+    }
+    el.textContent = tip;
+  }
+
+  /* -----------------------------------------------------------
+     5c. ONBOARDING (Pantalla de bienvenida)
+     ----------------------------------------------------------- */
+  function maybeShowOnboarding() {
+    const done = localStorage.getItem(KEYS.onboarded);
+    if (!done) {
+      $('onboarding').classList.remove('hidden');
+      setTimeout(() => $('onboard-balance').focus(), 350);
+    }
+  }
+
+  function finishOnboarding() {
+    const value = parseFloat($('onboard-balance').value);
+    state.balance = isNaN(value) || value < 0 ? 0 : value;
+    saveBalance();
+    localStorage.setItem(KEYS.onboarded, '1');
+    $('onboarding').classList.add('hidden');
+    renderAll();
+    renderTip();
+  }
+
+  /* -----------------------------------------------------------
+     5d. REINICIAR TODO
+     ----------------------------------------------------------- */
+  function openResetModal()  { $('reset-modal').classList.remove('hidden'); }
+  function closeResetModal() { $('reset-modal').classList.add('hidden'); }
+
+  function confirmReset() {
+    state.balance  = 0;
+    state.expenses = [];
+    state.incomes  = [];
+    keypadInput    = '';
+    localStorage.removeItem(KEYS.balance);
+    localStorage.removeItem(KEYS.expenses);
+    localStorage.removeItem(KEYS.incomes);
+    localStorage.removeItem(KEYS.onboarded);
+
+    $('input-category').value = '';
+    setMode('expense');
+    closeResetModal();
+    renderAll();
+    renderTip();
+    showPage('page-home');
+    // Vuelve a pedir el saldo inicial
+    maybeShowOnboarding();
   }
 
   /* -----------------------------------------------------------
@@ -524,6 +616,23 @@
     $('chat-input').addEventListener('keydown', e => {
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); }
     });
+
+    // Onboarding (pantalla de bienvenida)
+    $('btn-onboard-start').addEventListener('click', finishOnboarding);
+    $('onboard-balance').addEventListener('keydown', e => {
+      if (e.key === 'Enter') finishOnboarding();
+    });
+
+    // Reiniciar todo
+    $('btn-reset').addEventListener('click', openResetModal);
+    $('btn-reset-cancel').addEventListener('click', closeResetModal);
+    $('btn-reset-confirm').addEventListener('click', confirmReset);
+    $('reset-modal').addEventListener('click', e => {
+      if (e.target === $('reset-modal')) closeResetModal();
+    });
+
+    // Mostrar bienvenida si es la primera vez
+    maybeShowOnboarding();
 
     // Service Worker
     if ('serviceWorker' in navigator) {
