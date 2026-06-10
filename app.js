@@ -238,10 +238,8 @@
   }
 
   function renderBalance() {
-    const inp = $('input-balance');
-    if (document.activeElement !== inp) {
-      inp.value = state.balance ? state.balance.toFixed(2) : '';
-    }
+    const disp = $('balance-display');
+    if (disp) disp.textContent = state.balance.toFixed(2);
     $('summary-balance').textContent = formatMoney(state.balance);
     $('summary-spent').textContent   = formatMoney(getTotalSpent());
     renderBudgetBar();
@@ -368,13 +366,13 @@
      5a-bis. ANIMACIÓN DEL SALDO (contador + pulse)
      ----------------------------------------------------------- */
   function animateBalance(from, to) {
-    const input = $('input-balance');
-    const card  = document.querySelector('.balance-card');
-    if (!input) { return; }
+    const disp = $('balance-display');
+    const card = document.querySelector('.balance-card');
+    if (!disp) return;
 
     if (card) {
       card.classList.remove('balance-pulse');
-      void card.offsetWidth; // reinicia la animación
+      void card.offsetWidth;
       card.classList.add('balance-pulse');
     }
 
@@ -383,17 +381,11 @@
     const diff = to - from;
 
     function frame(now) {
-      const t = Math.min((now - start) / duration, 1);
+      const t     = Math.min((now - start) / duration, 1);
       const eased = 1 - Math.pow(1 - t, 3); // easeOutCubic
-      const val = from + diff * eased;
-      if (document.activeElement !== input) {
-        input.value = val.toFixed(2);
-      }
-      if (t < 1) {
-        requestAnimationFrame(frame);
-      } else if (document.activeElement !== input) {
-        input.value = to ? to.toFixed(2) : '';
-      }
+      disp.textContent = (from + diff * eased).toFixed(2);
+      if (t < 1) requestAnimationFrame(frame);
+      else disp.textContent = to.toFixed(2);
     }
     requestAnimationFrame(frame);
   }
@@ -477,12 +469,6 @@
   /* -----------------------------------------------------------
      6. ACCIONES
      ----------------------------------------------------------- */
-  function handleBalanceChange(e) {
-    state.balance = parseFloat(e.target.value) || 0;
-    saveBalance();
-    renderBalance();
-  }
-
   function handleRegister() {
     const amount  = parseFloat(keypadInput);
     const concept = $('input-concept').value.trim();
@@ -1073,8 +1059,10 @@
     renderAll();
     updateDisplay();
 
-    // Balance input
-    $('input-balance').addEventListener('input', handleBalanceChange);
+    // Tip — cerrar banner
+    $('btn-tip-close').addEventListener('click', () => {
+      $('tip-banner').style.display = 'none';
+    });
 
     // Keypad
     document.querySelectorAll('.key').forEach(btn => {
@@ -1125,8 +1113,15 @@
 
     // Onboarding (pantalla de bienvenida)
     $('btn-onboard-start').addEventListener('click', finishOnboarding);
+    $('onboard-balance').addEventListener('input', () => {
+      const v = parseFloat($('onboard-balance').value);
+      $('btn-onboard-start').disabled = !(v > 0);
+    });
     $('onboard-balance').addEventListener('keydown', e => {
-      if (e.key === 'Enter') finishOnboarding();
+      if (e.key === 'Enter') {
+        const v = parseFloat($('onboard-balance').value);
+        if (v > 0) finishOnboarding();
+      }
     });
 
     // Reiniciar todo
