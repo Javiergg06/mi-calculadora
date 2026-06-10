@@ -108,18 +108,29 @@
           <span id="keypad-display-value" class="amount-display-num is-placeholder">0</span>
         </div>
 
-        <!-- Category input -->
-        <div class="category-wrap">
-          <svg class="category-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M17.707 9.293a1 1 0 010 1.414l-7 7a1 1 0 01-1.414 0l-7-7A.997.997 0 012 10V5a3 3 0 013-3h5c.256 0 .512.098.707.293l7 7zM5 6a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+        <!-- Selector de categoría (abre bottom sheet) -->
+        <button id="btn-category" class="category-select" type="button">
+          <span class="category-select-left">
+            <span id="category-emoji" class="category-select-emoji">🍔</span>
+            <span class="category-select-text">
+              <span class="category-select-label">Categoría</span>
+              <span id="category-name" class="category-select-value">Comida</span>
+            </span>
+          </span>
+          <svg class="category-select-chevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
           </svg>
+        </button>
+
+        <!-- Concepto (texto libre) -->
+        <div class="concept-wrap">
           <input
-            id="input-category"
+            id="input-concept"
             type="text"
             enterkeyhint="done"
             autocomplete="off"
-            placeholder="Categoría (ej. Comida, Taxi…)"
-            class="category-input"
+            placeholder="Concepto (ej. Burger King)"
+            class="concept-input"
           />
         </div>
 
@@ -193,6 +204,14 @@
           <div class="budget-track">
             <div id="budget-bar" class="budget-fill" style="width:0%"></div>
           </div>
+        </div>
+
+        <!-- Resumen por categoría -->
+        <div id="category-stats-wrap" class="cat-stats-wrap hidden">
+          <div class="list-section-header">
+            <span class="list-section-title">Por categoría</span>
+          </div>
+          <div id="category-stats" class="cat-stats"></div>
         </div>
 
         <!-- Section header -->
@@ -427,7 +446,24 @@
     </div>
   </div>
 
+  <!-- ============================================================ -->
+  <!-- BOTTOM SHEET — SELECTOR DE CATEGORÍA                         -->
+  <!-- ============================================================ -->
+  <div id="category-sheet" class="cat-sheet hidden" role="dialog" aria-modal="true">
+    <div class="cat-sheet-backdrop" id="cat-sheet-backdrop"></div>
+    <div class="cat-sheet-panel">
+      <div class="cat-sheet-grabber"></div>
+      <p class="cat-sheet-title">Elige una categoría</p>
+      <ul id="cat-sheet-list" class="cat-sheet-list">
+        <!-- opciones inyectadas desde JS -->
+      </ul>
+    </div>
+  </div>
 
+  <!-- Contenedor oculto para renderizar el PDF (html2pdf) -->
+  <div id="pdf-stage" aria-hidden="true"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
   <script src="app.js"></script>
 </body>
 </html>
