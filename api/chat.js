@@ -10,15 +10,14 @@ export default async function handler(req, res) {
     return;
   }
 
-  // Solo POST
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Método no permitido' });
   }
 
-  const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+  const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
-  if (!GEMINI_API_KEY) {
-    console.error('GEMINI_API_KEY no está configurada');
+  if (!OPENROUTER_API_KEY) {
+    console.error('OPENROUTER_API_KEY no está configurada');
     return res.status(500).json({ error: 'API Key no configurada' });
   }
 
@@ -35,8 +34,8 @@ export default async function handler(req, res) {
         .map(([cat, amt]) => `- ${cat}: €${Number(amt).toFixed(2)}`)
         .join('\n') || 'Sin gastos aún.';
 
-    const systemPrompt = `Eres un asistente inteligente para gestión de gastos personales.
-Tu usuario te habla sobre sus hábitos de gasto y tú das consejos prácticos, motivadores y personalizados.
+    const systemPrompt = `Eres Flux AI, un asistente inteligente para gestión de gastos personales.
+Das consejos prácticos, motivadores y personalizados sobre finanzas.
 
 Contexto financiero actual del usuario:
 - Dinero disponible: €${Number(context.balance).toFixed(2)}
@@ -45,42 +44,35 @@ Contexto financiero actual del usuario:
 - Gastos por categoría:
 ${categoriesText}
 
-Responde siempre en español, de forma breve (máx 2-3 párrafos), cercana y motivadora.
-Usa emojis si es relevante.`;
+Responde siempre en español, de forma breve (máx 2-3 párrafos), cercana y motivadora. Usa emojis si es relevante.`;
 
-    // Construir URL con API key
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
-
-    const geminiRes = await fetch(url, {
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
+        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
         'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://mi-calculadora-bq83.vercel.app',
+        'X-Title': 'Flux Finanzas',
       },
       body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              {
-                text: `${systemPrompt}\n\nUsuario: ${message}`,
-              },
-            ],
-          },
+        model: 'google/gemini-2.0-flash-001',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user',   content: message },
         ],
-        generationConfig: {
-          maxOutputTokens: 500,
-          temperature: 0.7,
-        },
+        max_tokens: 500,
+        temperature: 0.7,
       }),
     });
 
-    if (!geminiRes.ok) {
-      const errText = await geminiRes.text();
-      console.error(`Gemini error ${geminiRes.status}:`, errText);
-      return res.status(502).json({ error: `Gemini error: ${geminiRes.status}` });
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error(`OpenRouter error ${response.status}:`, errText);
+      return res.status(502).json({ error: `Error del modelo: ${response.status}` });
     }
 
-    const data = await geminiRes.json();
-    const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'No pude generar una respuesta.';
+    const data = await response.json();
+    const reply = data?.choices?.[0]?.message?.content || 'No pude generar una respuesta.';
 
     res.status(200).json({ reply });
   } catch (error) {
