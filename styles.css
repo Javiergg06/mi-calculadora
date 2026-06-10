@@ -102,15 +102,23 @@ input { user-select: text; }
   padding-bottom: 24px;
 }
 
+/* Home tab: sin scroll, todo compacto en pantalla */
+#page-home .tab-scroll {
+  overflow: hidden;
+  padding-bottom: 6px;
+  display: flex;
+  flex-direction: column;
+}
+
 /* ── Page nav header ──────────────────────────────────────────── */
 .page-nav {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-top: calc(var(--safe-top) + 12px);
+  padding-top: calc(var(--safe-top) + 10px);
   padding-left: 20px;
   padding-right: 20px;
-  padding-bottom: 12px;
+  padding-bottom: 10px;
   background: var(--bg);
   position: sticky;
   top: 0;
@@ -118,10 +126,16 @@ input { user-select: text; }
   flex-shrink: 0;
 }
 .page-nav-title {
-  font-size: 28px;
+  font-size: 26px;
   font-weight: 800;
   letter-spacing: -0.5px;
   color: var(--c-label);
+}
+
+/* Home nav: más compacto */
+#page-home .page-nav {
+  padding-top: calc(var(--safe-top) + 8px);
+  padding-bottom: 8px;
 }
 .page-nav-badge {
   width: 34px;
@@ -178,35 +192,36 @@ input { user-select: text; }
 .tip-banner {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin: 0 16px 16px;
-  padding: 13px 15px;
-  border-radius: 16px;
+  gap: 10px;
+  margin: 0 16px 8px;
+  padding: 8px 12px;
+  border-radius: 14px;
   background: linear-gradient(135deg, rgba(0,122,255,0.10), rgba(94,92,230,0.10));
   border: 0.5px solid rgba(0,122,255,0.15);
   animation: tip-in 0.4s ease;
+  flex-shrink: 0;
 }
 @keyframes tip-in {
   from { opacity: 0; transform: translateY(-6px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 .tip-icon {
-  font-size: 22px;
+  font-size: 18px;
   flex-shrink: 0;
 }
 .tip-body { flex: 1; min-width: 0; }
 .tip-label {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: var(--c-blue);
-  margin-bottom: 2px;
+  margin-bottom: 1px;
 }
 .tip-text {
-  font-size: 13.5px;
+  font-size: 12px;
   font-weight: 500;
-  line-height: 1.4;
+  line-height: 1.3;
   color: var(--c-label-2);
 }
 .tip-close {
@@ -225,13 +240,14 @@ input { user-select: text; }
 
 /* ── Balance hero card ────────────────────────────────────────── */
 .balance-card {
-  margin: 4px 16px 16px;
-  border-radius: 24px;
+  margin: 4px 16px 10px;
+  border-radius: 20px;
   background: linear-gradient(145deg, #101828 0%, #1C3760 55%, #0A5DC8 100%);
-  padding: 24px 24px 20px;
+  padding: 14px 20px 12px;
   position: relative;
   overflow: hidden;
-  box-shadow: 0 12px 40px rgba(10,93,200,0.28);
+  box-shadow: 0 8px 28px rgba(10,93,200,0.28);
+  flex-shrink: 0;
 }
 .balance-card-glow {
   position: absolute;
@@ -242,7 +258,7 @@ input { user-select: text; }
   pointer-events: none;
 }
 .balance-card-label {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.12em;
@@ -255,7 +271,7 @@ input { user-select: text; }
   gap: 6px;
 }
 .balance-card-symbol {
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 300;
   color: rgba(255,255,255,0.6);
   line-height: 1;
@@ -263,12 +279,15 @@ input { user-select: text; }
 .balance-card-display {
   flex: 1;
   color: #fff;
-  font-size: 52px;
+  font-size: 42px;
   font-weight: 800;
-  letter-spacing: -2px;
+  letter-spacing: -1.5px;
   line-height: 1;
   min-width: 0;
   user-select: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ── Segmented control (Gasto / Ingreso) ──────────────────────── */
@@ -277,13 +296,14 @@ input { user-select: text; }
   background: rgba(118,118,128,0.12);
   border-radius: 10px;
   padding: 2px;
-  margin: 0 16px 20px;
+  margin: 0 16px 8px;
+  flex-shrink: 0;
 }
 .seg-btn {
   flex: 1;
-  padding: 7px 12px;
+  padding: 5px 12px;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--c-label-3);
   transition: all 0.18s ease;
@@ -302,20 +322,21 @@ input { user-select: text; }
   display: flex;
   align-items: baseline;
   justify-content: center;
-  gap: 6px;
-  margin: 0 16px 20px;
-  min-height: 68px;
+  gap: 4px;
+  margin: 0 16px 8px;
+  min-height: 50px;
+  flex-shrink: 0;
 }
 .amount-display-sym {
-  font-size: 28px;
+  font-size: 22px;
   font-weight: 300;
   color: var(--c-label-3);
   transition: color 0.2s;
 }
 .amount-display-num {
-  font-size: 60px;
+  font-size: 48px;
   font-weight: 800;
-  letter-spacing: -3px;
+  letter-spacing: -2px;
   color: var(--c-label);
   line-height: 1;
   transition: color 0.2s;
@@ -336,48 +357,50 @@ input { user-select: text; }
   align-items: center;
   justify-content: space-between;
   width: calc(100% - 32px);
-  margin: 0 16px 10px;
+  margin: 0 16px 6px;
   background: var(--bg-sheet);
-  border-radius: 14px;
-  padding: 12px 14px;
+  border-radius: 12px;
+  padding: 8px 12px;
   box-shadow: 0 1px 0 var(--c-sep);
   transition: transform 0.12s ease, background 0.12s ease;
+  flex-shrink: 0;
 }
 .category-select:active { transform: scale(0.99); background: #fafafa; }
-.category-select-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.category-select-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .category-select-emoji {
-  width: 38px; height: 38px;
-  border-radius: 11px;
+  width: 30px; height: 30px;
+  border-radius: 9px;
   background: var(--bg);
   display: flex; align-items: center; justify-content: center;
-  font-size: 19px;
+  font-size: 15px;
   flex-shrink: 0;
 }
 .category-select-text { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
 .category-select-label {
-  font-size: 10px; font-weight: 600; text-transform: uppercase;
+  font-size: 9px; font-weight: 600; text-transform: uppercase;
   letter-spacing: 0.1em; color: var(--c-label-4);
 }
 .category-select-value {
-  font-size: 16px; font-weight: 600; color: var(--c-label);
+  font-size: 14px; font-weight: 600; color: var(--c-label);
   line-height: 1.2;
 }
-.category-select-chevron { width: 18px; height: 18px; color: var(--c-label-4); flex-shrink: 0; }
+.category-select-chevron { width: 16px; height: 16px; color: var(--c-label-4); flex-shrink: 0; }
 
 /* ── Campo concepto ───────────────────────────────────────────── */
 .concept-wrap {
-  margin: 0 16px 20px;
+  margin: 0 16px 8px;
   background: var(--bg-sheet);
-  border-radius: 14px;
-  padding: 14px 16px;
+  border-radius: 12px;
+  padding: 9px 14px;
   box-shadow: 0 1px 0 var(--c-sep);
+  flex-shrink: 0;
 }
 .concept-input {
   width: 100%;
   background: transparent;
   border: none;
   outline: none;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--c-label);
   font-family: inherit;
@@ -497,17 +520,18 @@ input { user-select: text; }
 .keypad {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
+  gap: 7px;
   padding: 0 16px;
-  margin-bottom: 16px;
+  margin-bottom: 8px;
+  flex-shrink: 0;
 }
 .key {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 62px;
-  border-radius: 14px;
-  font-size: 22px;
+  height: 48px;
+  border-radius: 12px;
+  font-size: 20px;
   font-weight: 500;
   color: var(--c-label);
   background: var(--bg-sheet);
@@ -528,8 +552,8 @@ input { user-select: text; }
   background: rgba(255,59,48,0.20);
 }
 .key-icon-back {
-  width: 26px;
-  height: 26px;
+  width: 22px;
+  height: 22px;
   color: var(--c-red);
 }
 
@@ -538,16 +562,17 @@ input { user-select: text; }
   display: block;
   width: calc(100% - 32px);
   margin: 0 16px;
-  padding: 17px;
-  border-radius: 16px;
+  padding: 13px;
+  border-radius: 14px;
   background: var(--c-blue);
   color: #fff;
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 700;
   letter-spacing: -0.2px;
   text-align: center;
   transition: opacity 0.15s ease, transform 0.15s ease;
-  box-shadow: 0 4px 20px rgba(0,122,255,0.35);
+  box-shadow: 0 4px 16px rgba(0,122,255,0.35);
+  flex-shrink: 0;
 }
 .cta-btn:active {
   opacity: 0.85;

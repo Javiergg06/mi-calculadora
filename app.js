@@ -237,9 +237,21 @@
     if (pctEl) pctEl.textContent = pct.toFixed(0) + '%';
   }
 
+  /* Muestra el saldo adaptando el tamaño de fuente a los dígitos */
+  function setBalanceDisplay(val) {
+    const el = $('balance-display');
+    if (!el) return;
+    const str = val.toFixed(2);
+    el.textContent = str;
+    const digits = str.replace(/[^0-9]/g, '').length;
+    el.style.fontSize = digits > 10 ? '24px'
+                      : digits > 8  ? '30px'
+                      : digits > 6  ? '36px'
+                      : '';          // usa el CSS por defecto (42px)
+  }
+
   function renderBalance() {
-    const disp = $('balance-display');
-    if (disp) disp.textContent = state.balance.toFixed(2);
+    setBalanceDisplay(state.balance);
     $('summary-balance').textContent = formatMoney(state.balance);
     $('summary-spent').textContent   = formatMoney(getTotalSpent());
     renderBudgetBar();
@@ -383,9 +395,9 @@
     function frame(now) {
       const t     = Math.min((now - start) / duration, 1);
       const eased = 1 - Math.pow(1 - t, 3); // easeOutCubic
-      disp.textContent = (from + diff * eased).toFixed(2);
+      setBalanceDisplay(from + diff * eased);
       if (t < 1) requestAnimationFrame(frame);
-      else disp.textContent = to.toFixed(2);
+      else setBalanceDisplay(to);
     }
     requestAnimationFrame(frame);
   }
@@ -541,9 +553,14 @@
     renderBudgetBar();
   }
 
-  function handleClearAll() {
+  function openClearModal()  {
     if (state.expenses.length + state.incomes.length === 0) return;
-    if (!confirm('¿Borrar todos los movimientos? El saldo no se modificará.')) return;
+    $('clear-modal').classList.remove('hidden');
+  }
+  function closeClearModal() { $('clear-modal').classList.add('hidden'); }
+
+  function confirmClearAll() {
+    closeClearModal();
     state.expenses = [];
     state.incomes  = [];
     saveExpenses();
@@ -1094,7 +1111,12 @@
     });
 
     // Borrar todo
-    $('btn-clear').addEventListener('click', handleClearAll);
+    $('btn-clear').addEventListener('click', openClearModal);
+    $('btn-clear-confirm').addEventListener('click', confirmClearAll);
+    $('btn-clear-cancel').addEventListener('click', closeClearModal);
+    $('clear-modal').addEventListener('click', e => {
+      if (e.target === $('clear-modal')) closeClearModal();
+    });
 
     // Delete movement
     $('expense-list').addEventListener('click', e => {
