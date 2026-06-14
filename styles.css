@@ -858,6 +858,7 @@ input { user-select: text; }
   bottom: 0;
   left: 0; right: 0;
   height: var(--tabbar-total);
+  transition: transform 0.22s ease;
   background: rgba(249,249,249,0.92);
   backdrop-filter: saturate(180%) blur(20px);
   -webkit-backdrop-filter: saturate(180%) blur(20px);

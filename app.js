@@ -1226,6 +1226,34 @@
     // Mostrar bienvenida si es la primera vez
     maybeShowOnboarding();
 
+    // Ocultar tab bar cuando el teclado sube en la pestaña de chat
+    const tabBar = document.querySelector('.tab-bar');
+    function handleViewportResize() {
+      const kbHeight = window.innerHeight - (window.visualViewport ? window.visualViewport.height : window.innerHeight);
+      const chatActive = $('page-chat') && $('page-chat').classList.contains('active');
+      if (kbHeight > 100 && chatActive) {
+        tabBar.style.transform = 'translateY(150%)';
+        $('page-chat').style.bottom = '0';
+        // Scroll al último mensaje
+        const cs = $('chat-scroll');
+        if (cs) setTimeout(() => { cs.scrollTop = cs.scrollHeight; }, 100);
+      } else {
+        tabBar.style.transform = '';
+        $('page-chat').style.bottom = '';
+      }
+    }
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', handleViewportResize);
+    }
+    // Fallback: focus/blur en el input de chat
+    $('chat-input').addEventListener('focus', () => {
+      setTimeout(handleViewportResize, 300);
+    });
+    $('chat-input').addEventListener('blur', () => {
+      tabBar.style.transform = '';
+      $('page-chat').style.bottom = '';
+    });
+
     // Service Worker
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('sw.js').catch(() => {});
