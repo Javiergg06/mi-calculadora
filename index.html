@@ -54,16 +54,26 @@
 
       <!-- Header -->
       <header class="page-nav">
-        <div class="nav-brand">
+        <button id="btn-account" class="account-switcher" aria-label="Cambiar de cuenta">
           <div class="page-nav-badge">⚡</div>
-          <div class="page-nav-title">Flux</div>
-        </div>
-        <button id="btn-reset" class="nav-action-btn nav-action-reset" aria-label="Reiniciar">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:13px;height:13px">
-            <path fill-rule="evenodd" d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.31.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.39zm1.23-3.723a.75.75 0 00.219-.53V2.929a.75.75 0 00-1.5 0V5.36l-.31-.31A7 7 0 003.239 8.188a.75.75 0 101.448.389A5.5 5.5 0 0113.89 6.11l.311.31h-2.432a.75.75 0 000 1.5h4.243a.75.75 0 00.53-.219z" clip-rule="evenodd" />
+          <span id="account-name" class="account-name">Principal</span>
+          <svg class="account-chevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
           </svg>
-          <span>Reiniciar</span>
         </button>
+        <div class="nav-actions">
+          <button id="btn-add-account" class="icon-circle-btn" aria-label="Añadir cuenta">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:18px;height:18px">
+              <path d="M10 5a.75.75 0 01.75.75v3.5h3.5a.75.75 0 010 1.5h-3.5v3.5a.75.75 0 01-1.5 0v-3.5h-3.5a.75.75 0 010-1.5h3.5v-3.5A.75.75 0 0110 5z" />
+            </svg>
+          </button>
+          <button id="btn-reset" class="nav-action-btn nav-action-reset" aria-label="Reiniciar">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:13px;height:13px">
+              <path fill-rule="evenodd" d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.31.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.39zm1.23-3.723a.75.75 0 00.219-.53V2.929a.75.75 0 00-1.5 0V5.36l-.31-.31A7 7 0 003.239 8.188a.75.75 0 101.448.389A5.5 5.5 0 0113.89 6.11l.311.31h-2.432a.75.75 0 000 1.5h4.243a.75.75 0 00.53-.219z" clip-rule="evenodd" />
+            </svg>
+            <span>Reiniciar</span>
+          </button>
+        </div>
       </header>
 
       <div class="tab-scroll">
@@ -264,7 +274,51 @@
 
 
     <!-- ============================================================ -->
-    <!-- TAB 3 — ASISTENTE IA                                         -->
+    <!-- TAB 3 — ESTADÍSTICAS                                         -->
+    <!-- ============================================================ -->
+    <section id="page-stats" class="tab-page">
+
+      <header class="page-nav">
+        <div class="page-nav-title">Estadísticas</div>
+      </header>
+
+      <div class="tab-scroll">
+
+        <!-- Total gastado -->
+        <div class="stats-total-card">
+          <p class="stats-total-label">Total gastado</p>
+          <p id="stats-total" class="stats-total-value">€0.00</p>
+          <p id="stats-count" class="stats-total-sub">0 gastos</p>
+        </div>
+
+        <!-- Cuerpo (gráfico + filtros + detalle) -->
+        <div id="stats-body">
+          <div class="list-section-header">
+            <span class="list-section-title">Gasto por categoría</span>
+          </div>
+          <div id="stats-chart" class="stats-chart"></div>
+
+          <div class="list-section-header">
+            <span class="list-section-title">Filtrar por categoría</span>
+          </div>
+          <div id="stats-chips" class="stats-chips"></div>
+
+          <div id="stats-detail" class="stats-detail"></div>
+        </div>
+
+        <!-- Empty state -->
+        <div id="stats-empty" class="empty-state">
+          <div class="empty-icon">📊</div>
+          <p class="empty-title">Sin datos todavía</p>
+          <p class="empty-sub">Registra algún gasto para ver tus estadísticas</p>
+        </div>
+
+      </div><!-- /tab-scroll -->
+    </section>
+
+
+    <!-- ============================================================ -->
+    <!-- TAB 4 — ASISTENTE IA                                         -->
     <!-- ============================================================ -->
     <section id="page-chat" class="tab-page">
 
@@ -331,6 +385,13 @@
         <span class="tab-label">Historial</span>
       </button>
 
+      <button class="tab-item" data-page="page-stats">
+        <svg class="tab-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M18.375 2.25c-1.035 0-1.875.84-1.875 1.875v15.75c0 1.035.84 1.875 1.875 1.875h.75c1.035 0 1.875-.84 1.875-1.875V4.125c0-1.036-.84-1.875-1.875-1.875h-.75zM9.75 8.625c0-1.036.84-1.875 1.875-1.875h.75c1.036 0 1.875.84 1.875 1.875v11.25c0 1.035-.84 1.875-1.875 1.875h-.75a1.875 1.875 0 01-1.875-1.875V8.625zM3 13.125c0-1.036.84-1.875 1.875-1.875h.75c1.036 0 1.875.84 1.875 1.875v6.75c0 1.035-.84 1.875-1.875 1.875h-.75A1.875 1.875 0 013 19.875v-6.75z" />
+        </svg>
+        <span class="tab-label">Stats</span>
+      </button>
+
       <button class="tab-item" data-page="page-chat">
         <svg class="tab-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
           <path fill-rule="evenodd" d="M4.848 2.771A49.144 49.144 0 0112 2.25c2.43 0 4.817.178 7.152.52 1.978.292 3.348 2.024 3.348 3.97v6.02c0 1.946-1.37 3.678-3.348 3.97a48.901 48.901 0 01-3.476.383.39.39 0 00-.297.17l-2.755 4.133a.75.75 0 01-1.248 0l-2.755-4.133a.39.39 0 00-.297-.17 48.9 48.9 0 01-3.476-.384c-1.978-.29-3.348-2.024-3.348-3.97V6.741c0-1.946 1.37-3.68 3.348-3.97z" clip-rule="evenodd" />
@@ -387,10 +448,24 @@
     <div id="reset-modal" class="reset-modal hidden">
       <div class="reset-sheet">
         <div class="reset-sheet-icon">🔄</div>
-        <h2 class="reset-sheet-title">¿Reiniciar todo?</h2>
-        <p class="reset-sheet-sub">Se borrará tu saldo, todos los gastos y todos los ingresos. Esta acción no se puede deshacer.</p>
-        <button id="btn-reset-confirm" class="reset-sheet-confirm">Sí, reiniciar todo</button>
+        <h2 class="reset-sheet-title">¿Reiniciar esta cuenta?</h2>
+        <p class="reset-sheet-sub">Se borrará el saldo, los gastos y los ingresos de esta cuenta. Las demás cuentas no se tocan.</p>
+        <button id="btn-reset-confirm" class="reset-sheet-confirm">Sí, reiniciar cuenta</button>
         <button id="btn-reset-cancel" class="reset-sheet-cancel">Cancelar</button>
+      </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- MODAL — Nueva cuenta                                         -->
+    <!-- ============================================================ -->
+    <div id="account-modal" class="reset-modal hidden">
+      <div class="reset-sheet">
+        <div class="reset-sheet-icon">🏦</div>
+        <h2 class="reset-sheet-title">Nueva cuenta</h2>
+        <p class="reset-sheet-sub">Dale un nombre a tu nueva cuenta (ej. Ahorros, Negocio). Después te pediremos su saldo inicial.</p>
+        <input id="account-name-input" type="text" maxlength="24" autocomplete="off" placeholder="Nombre de la cuenta" class="account-name-field" />
+        <button id="btn-account-create" class="reset-sheet-confirm reset-sheet-create">Crear cuenta</button>
+        <button id="btn-account-cancel" class="reset-sheet-cancel">Cancelar</button>
       </div>
     </div>
 
@@ -472,6 +547,26 @@
       <ul id="cat-sheet-list" class="cat-sheet-list">
         <!-- opciones inyectadas desde JS -->
       </ul>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- BOTTOM SHEET — CUENTAS                                       -->
+  <!-- ============================================================ -->
+  <div id="account-sheet" class="cat-sheet hidden" role="dialog" aria-modal="true">
+    <div class="cat-sheet-backdrop" id="account-sheet-backdrop"></div>
+    <div class="cat-sheet-panel">
+      <div class="cat-sheet-grabber"></div>
+      <p class="cat-sheet-title">Tus cuentas</p>
+      <ul id="account-sheet-list" class="cat-sheet-list">
+        <!-- cuentas inyectadas desde JS -->
+      </ul>
+      <button id="btn-add-account-sheet" class="account-add-btn">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:18px;height:18px">
+          <path d="M10 5a.75.75 0 01.75.75v3.5h3.5a.75.75 0 010 1.5h-3.5v3.5a.75.75 0 01-1.5 0v-3.5h-3.5a.75.75 0 010-1.5h3.5v-3.5A.75.75 0 0110 5z" />
+        </svg>
+        Añadir cuenta
+      </button>
     </div>
   </div>
 

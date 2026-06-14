@@ -188,6 +188,62 @@ input { user-select: text; }
 }
 .nav-action-clear:active { background: rgba(255,59,48,0.18); }
 
+/* ── Selector de cuenta (header) ──────────────────────────────── */
+.account-switcher {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px 4px 4px;
+  border-radius: 99px;
+  background: rgba(118,118,128,0.10);
+  min-width: 0;
+  max-width: 56%;
+  transition: background 0.15s ease, transform 0.12s ease;
+}
+.account-switcher:active { transform: scale(0.97); background: rgba(118,118,128,0.18); }
+.account-name {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  color: var(--c-label);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.account-chevron { width: 15px; height: 15px; color: var(--c-label-4); flex-shrink: 0; }
+
+.nav-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.icon-circle-btn {
+  width: 32px; height: 32px;
+  border-radius: 99px;
+  background: rgba(0,122,255,0.10);
+  color: var(--c-blue);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, transform 0.12s ease;
+}
+.icon-circle-btn:active { background: rgba(0,122,255,0.20); transform: scale(0.92); }
+
+/* Botón "Añadir cuenta" dentro del bottom sheet */
+.account-add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  margin-top: 8px;
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(0,122,255,0.10);
+  color: var(--c-blue);
+  font-size: 15px;
+  font-weight: 700;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+.account-add-btn:active { background: rgba(0,122,255,0.18); transform: scale(0.98); }
+
 /* ── Tip banner (consejo del día) ─────────────────────────────── */
 .tip-banner {
   display: flex;
@@ -1233,6 +1289,103 @@ input { user-select: text; }
   transition: transform 0.15s ease;
 }
 .reset-sheet-cancel:active { transform: scale(0.98); }
+.reset-sheet-create { background: var(--c-blue); }
+
+/* Campo de nombre de cuenta */
+.account-name-field {
+  width: 100%;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  border-radius: 14px;
+  border: 1.5px solid var(--c-sep);
+  background: var(--bg);
+  font-size: 16px;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--c-label);
+  outline: none;
+  text-align: center;
+  transition: border-color 0.15s ease;
+}
+.account-name-field:focus { border-color: var(--c-blue); }
+.account-name-field::placeholder { color: var(--c-label-4); font-weight: 500; }
+
+/* ── Estadísticas ─────────────────────────────────────────────── */
+.stats-total-card {
+  margin: 0 16px 8px;
+  border-radius: 18px;
+  background: linear-gradient(145deg, #101828 0%, #1C3760 55%, #0A5DC8 100%);
+  padding: 18px 20px;
+  color: #fff;
+  box-shadow: 0 8px 28px rgba(10,93,200,0.22);
+}
+.stats-total-label {
+  font-size: 10px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.12em; color: rgba(255,255,255,0.5);
+}
+.stats-total-value {
+  font-size: 34px; font-weight: 800; letter-spacing: -1px; margin-top: 4px;
+}
+.stats-total-sub { font-size: 12px; color: rgba(255,255,255,0.55); margin-top: 2px; }
+
+.stats-chart {
+  background: var(--bg-sheet);
+  border-radius: 16px;
+  margin: 0 16px;
+  padding: 6px 16px;
+  box-shadow: 0 2px 12px var(--c-sep-2);
+}
+.stat-bar-row {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 12px 0;
+  border-bottom: 0.5px solid var(--c-sep);
+  transition: opacity 0.15s ease;
+}
+.stat-bar-row:last-child { border-bottom: none; }
+.stat-bar-row:active { opacity: 0.6; }
+.stat-bar-row.is-active .stat-bar-label { color: var(--c-blue); }
+.stat-bar-head {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 7px;
+}
+.stat-bar-emoji { font-size: 17px; }
+.stat-bar-label { flex: 1; font-size: 14px; font-weight: 600; color: var(--c-label); }
+.stat-bar-pct { font-size: 12px; font-weight: 600; color: var(--c-label-4); }
+.stat-bar-amt {
+  font-size: 14px; font-weight: 800; color: var(--c-label);
+  font-variant-numeric: tabular-nums; min-width: 64px; text-align: right;
+}
+.stat-bar-track { height: 8px; background: var(--c-sep); border-radius: 99px; overflow: hidden; }
+.stat-bar-fill { height: 100%; border-radius: 99px; transition: width 0.6s cubic-bezier(0.16,1,0.3,1); }
+
+/* Chips de filtro */
+.stats-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 16px;
+}
+.stat-chip {
+  padding: 8px 14px;
+  border-radius: 99px;
+  background: var(--bg-sheet);
+  color: var(--c-label-2);
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 1px 0 var(--c-sep);
+  transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
+}
+.stat-chip:active { transform: scale(0.95); }
+.stat-chip.is-active { background: var(--c-blue); color: #fff; box-shadow: none; }
+
+.stats-detail { margin-top: 4px; }
+.stats-hint {
+  text-align: center;
+  font-size: 13px;
+  color: var(--c-label-4);
+  padding: 18px 16px 4px;
+}
 /* ── Informe mensual card ─────────────────────────────────────── */
 .report-card {
   display: flex;

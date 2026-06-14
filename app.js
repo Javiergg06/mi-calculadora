@@ -9,11 +9,21 @@
      1. ESTADO + PERSISTENCIA
      ----------------------------------------------------------- */
   const KEYS = {
+    accounts:  'fx_accounts',   // [{id, name}]
+    active:    'fx_active',      // id de la cuenta activa
+    // Claves antiguas (solo para migrar datos de una sola cuenta) ──
     balance:   'fx_balance',
     expenses:  'fx_expenses',
     incomes:   'fx_incomes',
     onboarded: 'fx_onboarded',
   };
+
+  /* Cuentas (multicuenta) */
+  let accounts = [];          // [{id, name}]
+  let activeAccountId = null;
+
+  // Clave de almacenamiento por cuenta: fx_<base>_<id>
+  function accKey(base) { return 'fx_' + base + '_' + activeAccountId; }
 
   /* Consejos financieros que rotan en la pantalla de inicio */
   const TIPS = [
@@ -59,16 +69,52 @@
 
   let keypadInput = ''; // cadena construida por el teclado numérico
 
-  function loadState() {
-    const raw = localStorage.getItem(KEYS.balance);
-    state.balance = raw !== null ? parseFloat(raw) : 0;
-    try { state.expenses = JSON.parse(localStorage.getItem(KEYS.expenses) || '[]'); } catch { state.expenses = []; }
-    try { state.incomes  = JSON.parse(localStorage.getItem(KEYS.incomes)  || '[]'); } catch { state.incomes  = []; }
+  /* Carga la lista de cuentas; migra datos antiguos la primera vez */
+  function loadAccounts() {
+    let list = null;
+    try { list = JSON.parse(localStorage.getItem(KEYS.accounts) || 'null'); } catch { list = null; }
+
+    if (!Array.isArray(list) || list.length === 0) {
+      // Primera vez (o app vieja de una sola cuenta) → crea "Principal"
+      const defId = 'main';
+      accounts = [{ id: defId, name: 'Principal' }];
+      localStorage.setItem(KEYS.accounts, JSON.stringify(accounts));
+      activeAccountId = defId;
+      localStorage.setItem(KEYS.active, defId);
+
+      // Migrar datos antiguos (si existían) a la cuenta Principal
+      const oldBalance = localStorage.getItem(KEYS.balance);
+      if (oldBalance !== null) {
+        localStorage.setItem('fx_balance_' + defId,  oldBalance);
+        localStorage.setItem('fx_expenses_' + defId, localStorage.getItem(KEYS.expenses) || '[]');
+        localStorage.setItem('fx_incomes_' + defId,  localStorage.getItem(KEYS.incomes)  || '[]');
+        if (localStorage.getItem(KEYS.onboarded)) localStorage.setItem('fx_onboarded_' + defId, '1');
+        localStorage.removeItem(KEYS.balance);
+        localStorage.removeItem(KEYS.expenses);
+        localStorage.removeItem(KEYS.incomes);
+        localStorage.removeItem(KEYS.onboarded);
+      }
+    } else {
+      accounts = list;
+      activeAccountId = localStorage.getItem(KEYS.active) || accounts[0].id;
+      if (!accounts.find(a => a.id === activeAccountId)) activeAccountId = accounts[0].id;
+    }
   }
 
-  function saveBalance()  { localStorage.setItem(KEYS.balance,  String(state.balance)); }
-  function saveExpenses() { localStorage.setItem(KEYS.expenses, JSON.stringify(state.expenses)); }
-  function saveIncomes()  { localStorage.setItem(KEYS.incomes,  JSON.stringify(state.incomes)); }
+  function saveAccounts()        { localStorage.setItem(KEYS.accounts, JSON.stringify(accounts)); }
+  function setActiveAccount(id)  { activeAccountId = id; localStorage.setItem(KEYS.active, id); }
+  function activeAccount()       { return accounts.find(a => a.id === activeAccountId) || null; }
+
+  function loadState() {
+    const raw = localStorage.getItem(accKey('balance'));
+    state.balance = raw !== null ? parseFloat(raw) : 0;
+    try { state.expenses = JSON.parse(localStorage.getItem(accKey('expenses')) || '[]'); } catch { state.expenses = []; }
+    try { state.incomes  = JSON.parse(localStorage.getItem(accKey('incomes'))  || '[]'); } catch { state.incomes  = []; }
+  }
+
+  function saveBalance()  { localStorage.setItem(accKey('balance'),  String(state.balance)); }
+  function saveExpenses() { localStorage.setItem(accKey('expenses'), JSON.stringify(state.expenses)); }
+  function saveIncomes()  { localStorage.setItem(accKey('incomes'),  JSON.stringify(state.incomes)); }
 
   /* -----------------------------------------------------------
      2. UTILIDADES
@@ -259,6 +305,7 @@
 
   /* Controla si el historial está expandido o no */
   let listExpanded = false;
+  let statsFilter  = 'all'; // 'all' | clave de categoría
 
   /* Formatea la etiqueta del día (Hoy / Ayer / lun. 9 jun.) */
   function formatDayLabel(iso) {
@@ -425,10 +472,85 @@
     }).join('');
   }
 
+  /* -----------------------------------------------------------
+     5a-ter. ESTADÍSTICAS (gráfico de barras + filtro)
+     ----------------------------------------------------------- */
+  function setStatsFilter(key) {
+    // Volver a tocar la categoría activa la deselecciona
+    statsFilter = (key === statsFilter && key !== 'all') ? 'all' : key;
+    renderStats();
+  }
+
+  function renderStats() {
+    const totalEl = $('stats-total');
+    if (!totalEl) return; // la página no está en el DOM
+
+    const total  = getTotalSpent();
+    const groups = groupByCategory(state.expenses);
+    const nGastos = state.expenses.length;
+
+    totalEl.textContent = formatMoney(total);
+    $('stats-count').textContent = `${nGastos} gasto${nGastos !== 1 ? 's' : ''}`;
+
+    const emptyEl = $('stats-empty');
+    const bodyEl  = $('stats-body');
+    if (groups.length === 0) {
+      emptyEl.classList.remove('hidden');
+      bodyEl.classList.add('hidden');
+      return;
+    }
+    emptyEl.classList.add('hidden');
+    bodyEl.classList.remove('hidden');
+
+    // Gráfico de barras (todas las categorías)
+    $('stats-chart').innerHTML = groups.map(g => {
+      const pct    = total > 0 ? (g.total / total) * 100 : 0;
+      const color  = barColorFor(g.cat.key);
+      const active = statsFilter === g.cat.key ? ' is-active' : '';
+      return `
+        <button class="stat-bar-row${active}" data-key="${g.cat.key}">
+          <div class="stat-bar-head">
+            <span class="stat-bar-emoji">${g.cat.emoji}</span>
+            <span class="stat-bar-label">${g.cat.label}</span>
+            <span class="stat-bar-pct">${pct.toFixed(0)}%</span>
+            <span class="stat-bar-amt">€${g.total.toFixed(2)}</span>
+          </div>
+          <div class="stat-bar-track"><div class="stat-bar-fill" style="width:${pct.toFixed(1)}%;background:${color}"></div></div>
+        </button>`;
+    }).join('');
+
+    // Chips de filtro
+    $('stats-chips').innerHTML =
+      `<button class="stat-chip ${statsFilter === 'all' ? 'is-active' : ''}" data-key="all">Todas</button>` +
+      groups.map(g => `<button class="stat-chip ${statsFilter === g.cat.key ? 'is-active' : ''}" data-key="${g.cat.key}">${g.cat.emoji} ${g.cat.label}</button>`).join('');
+
+    // Detalle: gastos de la categoría seleccionada
+    const detail = $('stats-detail');
+    if (statsFilter === 'all') {
+      detail.innerHTML = '<p class="stats-hint">Toca una categoría para ver sus gastos.</p>';
+    } else {
+      const g = groups.find(x => x.cat.key === statsFilter);
+      if (!g) { statsFilter = 'all'; renderStats(); return; }
+      const items = g.items.map(it => `
+        <li class="mov-cell">
+          <div class="mov-icon" style="${catBg(g.cat.key)}">${g.cat.emoji}</div>
+          <div class="mov-info">
+            <p class="mov-name">${escapeHtml(it.concept || g.cat.label)}</p>
+            <p class="mov-date">${escapeHtml(formatDate(it.date))}</p>
+          </div>
+          <div class="mov-right"><span class="mov-amount-neg">−€${it.amount.toFixed(2)}</span></div>
+        </li>`).join('');
+      detail.innerHTML = `
+        <div class="list-section-header"><span class="list-section-title">${g.cat.emoji} ${escapeHtml(g.cat.label)} · €${g.total.toFixed(2)}</span></div>
+        <ul class="movements-list"><li class="mov-group"><ul class="mov-group-inner">${items}</ul></li></ul>`;
+    }
+  }
+
   function renderAll() {
     renderBalance();
     renderMovements();
     renderCategoryStats();
+    renderStats();
     renderTip();
   }
 
@@ -491,8 +613,10 @@
      5c. ONBOARDING (Pantalla de bienvenida)
      ----------------------------------------------------------- */
   function maybeShowOnboarding() {
-    const done = localStorage.getItem(KEYS.onboarded);
+    const done = localStorage.getItem(accKey('onboarded'));
     if (!done) {
+      $('onboard-balance').value = '';
+      $('btn-onboard-start').disabled = true;
       $('onboarding').classList.remove('hidden');
       setTimeout(() => $('onboard-balance').focus(), 350);
     }
@@ -502,7 +626,7 @@
     const value = parseFloat($('onboard-balance').value);
     state.balance = isNaN(value) || value < 0 ? 0 : value;
     saveBalance();
-    localStorage.setItem(KEYS.onboarded, '1');
+    localStorage.setItem(accKey('onboarded'), '1');
     $('onboarding').classList.add('hidden');
     renderAll();
     renderTip();
@@ -519,10 +643,11 @@
     state.expenses = [];
     state.incomes  = [];
     keypadInput    = '';
-    localStorage.removeItem(KEYS.balance);
-    localStorage.removeItem(KEYS.expenses);
-    localStorage.removeItem(KEYS.incomes);
-    localStorage.removeItem(KEYS.onboarded);
+    // Solo reinicia la cuenta activa (las demás cuentas se conservan)
+    localStorage.removeItem(accKey('balance'));
+    localStorage.removeItem(accKey('expenses'));
+    localStorage.removeItem(accKey('incomes'));
+    localStorage.removeItem(accKey('onboarded'));
 
     listExpanded = false;
     $('input-concept').value = '';
@@ -535,6 +660,82 @@
     showPage('page-home');
     // Vuelve a pedir el saldo inicial
     maybeShowOnboarding();
+  }
+
+  /* -----------------------------------------------------------
+     5e. MULTICUENTA
+     ----------------------------------------------------------- */
+  function renderAccountName() {
+    const acc = activeAccount();
+    const el = $('account-name');
+    if (el) el.textContent = acc ? acc.name : 'Cuenta';
+  }
+
+  // Resetea el estado en memoria + UI al cambiar/crear cuenta
+  function resetVolatileUI() {
+    keypadInput  = '';
+    listExpanded = false;
+    statsFilter  = 'all';
+    state.category = 'comida';
+    state.mode   = 'expense';
+    $('input-concept').value = '';
+    renderCategoryButton();
+    setMode('expense');
+    updateDisplay();
+  }
+
+  function openAccountSheet() {
+    const list = $('account-sheet-list');
+    list.innerHTML = accounts.map(a => `
+      <li class="cat-opt ${a.id === activeAccountId ? 'is-selected' : ''}" data-id="${a.id}">
+        <span class="cat-opt-emoji">🏦</span>
+        <span class="cat-opt-label">${escapeHtml(a.name)}</span>
+        <svg class="cat-opt-check" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clip-rule="evenodd" />
+        </svg>
+      </li>`).join('');
+    $('account-sheet').classList.remove('hidden');
+  }
+  function closeAccountSheet() { $('account-sheet').classList.add('hidden'); }
+
+  function switchAccount(id) {
+    closeAccountSheet();
+    if (id === activeAccountId) return;
+    setActiveAccount(id);
+    loadState();
+    resetVolatileUI();
+    renderAccountName();
+    renderAll();
+    renderTip();
+    showPage('page-home');
+    maybeShowOnboarding(); // por si la cuenta aún no tiene saldo inicial
+  }
+
+  function openAccountModal() {
+    closeAccountSheet();
+    $('account-name-input').value = '';
+    $('account-modal').classList.remove('hidden');
+    setTimeout(() => $('account-name-input').focus(), 300);
+  }
+  function closeAccountModal() { $('account-modal').classList.add('hidden'); }
+
+  function confirmCreateAccount() {
+    const name = $('account-name-input').value.trim();
+    if (!name) { $('account-name-input').focus(); return; }
+    const id = 'acc_' + Date.now();
+    accounts.push({ id, name });
+    saveAccounts();
+    setActiveAccount(id);
+
+    // Cuenta nueva → estado vacío
+    state.balance = 0; state.expenses = []; state.incomes = [];
+    resetVolatileUI();
+    renderAccountName();
+    closeAccountModal();
+    renderAll();
+    renderTip();
+    showPage('page-home');
+    maybeShowOnboarding(); // pedirá el saldo inicial de la nueva cuenta
   }
 
   /* -----------------------------------------------------------
@@ -1132,13 +1333,43 @@
      9. INICIALIZACIÓN + LISTENERS
      ----------------------------------------------------------- */
   function init() {
+    loadAccounts();
     loadState();
+    renderAccountName();
     renderAll();
     updateDisplay();
 
     // Tip — cerrar banner
     $('btn-tip-close').addEventListener('click', () => {
       $('tip-banner').style.display = 'none';
+    });
+
+    // Multicuenta
+    $('btn-account').addEventListener('click', openAccountSheet);
+    $('account-sheet-backdrop').addEventListener('click', closeAccountSheet);
+    $('account-sheet-list').addEventListener('click', e => {
+      const li = e.target.closest('.cat-opt');
+      if (li) switchAccount(li.dataset.id);
+    });
+    $('btn-add-account').addEventListener('click', openAccountModal);
+    $('btn-add-account-sheet').addEventListener('click', openAccountModal);
+    $('btn-account-create').addEventListener('click', confirmCreateAccount);
+    $('btn-account-cancel').addEventListener('click', closeAccountModal);
+    $('account-modal').addEventListener('click', e => {
+      if (e.target === $('account-modal')) closeAccountModal();
+    });
+    $('account-name-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter') confirmCreateAccount();
+    });
+
+    // Estadísticas — gráfico y chips
+    $('stats-chart').addEventListener('click', e => {
+      const row = e.target.closest('.stat-bar-row');
+      if (row) setStatsFilter(row.dataset.key);
+    });
+    $('stats-chips').addEventListener('click', e => {
+      const chip = e.target.closest('.stat-chip');
+      if (chip) setStatsFilter(chip.dataset.key);
     });
 
     // Keypad

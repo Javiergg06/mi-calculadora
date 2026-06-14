@@ -4,7 +4,7 @@
    Los datos (gastos, saldo) viven en localStorage
    =========================================================== */
 
-const CACHE_NAME = 'calculadora-gastos-v1';
+const CACHE_NAME = 'flux-v2';
 
 const urlsToCache = [
   '/',
@@ -44,36 +44,40 @@ self.addEventListener('activate', (event) => {
 
 // Interceptar requests
 self.addEventListener('fetch', (event) => {
-  // Solo cachear GET requests
-  if (event.request.method !== 'GET') {
+  if (event.request.method !== 'GET') return;
+
+  const url = new URL(event.request.url);
+  // No interceptar la API (chat IA) — siempre debe ir a la red
+  if (url.pathname.startsWith('/api/')) return;
+
+  const isSameOrigin = url.origin === self.location.origin;
+
+  // ── App propia (HTML/CSS/JS): NETWORK-FIRST ──
+  // Así los cambios se ven al instante; la cache es solo fallback offline.
+  if (isSameOrigin) {
+    event.respondWith(
+      fetch(event.request).then((response) => {
+        if (response && response.status === 200 && response.type !== 'error') {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        }
+        return response;
+      }).catch(() => caches.match(event.request).then(r => r || caches.match('/index.html')))
+    );
     return;
   }
 
+  // ── Recursos externos (fuentes, CDN): CACHE-FIRST ──
   event.respondWith(
-    caches.match(event.request).then((response) => {
-      // Si está en cache, devolverlo
-      if (response) {
-        return response;
-      }
-
-      // Si no está en cache, intentar traerlo de internet
+    caches.match(event.request).then((cached) => {
+      if (cached) return cached;
       return fetch(event.request).then((response) => {
-        // No cachear si la respuesta es un error
-        if (!response || response.status !== 200 || response.type === 'error') {
-          return response;
+        if (response && response.status === 200) {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
         }
-
-        // Cachear la respuesta exitosa
-        const responseToCache = response.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseToCache);
-        });
-
         return response;
-      }).catch(() => {
-        // Si falla internet, devolver la versión en cache (ya debería estar)
-        return caches.match(event.request);
-      });
+      }).catch(() => cached);
     })
   );
 });
