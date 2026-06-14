@@ -671,6 +671,24 @@ input { user-select: text; }
 
 /* ── Movements list ───────────────────────────────────────────── */
 .movements-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* Cabecera de día */
+.mov-day-header {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--c-label-4);
+  padding: 12px 20px 5px;
+}
+
+/* Grupo de items del día (tarjeta) */
+.mov-group { list-style: none; }
+.mov-group-inner {
   background: var(--bg-sheet);
   border-radius: 16px;
   margin: 0 16px;
@@ -689,6 +707,28 @@ input { user-select: text; }
   animation: cell-in 0.2s ease forwards;
 }
 .mov-cell:last-child { border-bottom: none; }
+
+/* Botón ver más / ver menos */
+.see-more-btn {
+  display: block;
+  width: calc(100% - 32px);
+  margin: 10px 16px 0;
+  padding: 13px;
+  border-radius: 14px;
+  background: var(--bg-sheet);
+  color: var(--c-blue);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+  box-shadow: 0 1px 0 var(--c-sep);
+  transition: opacity 0.15s;
+}
+.see-more-btn:active { opacity: 0.6; }
+.see-less-btn {
+  color: var(--c-label-3);
+  font-weight: 500;
+  font-size: 13px;
+}
 @keyframes cell-in {
   from { opacity: 0; transform: translateX(-6px); }
   to   { opacity: 1; transform: translateX(0); }

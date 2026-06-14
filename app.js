@@ -257,64 +257,122 @@
     renderBudgetBar();
   }
 
+  /* Controla si el historial está expandido o no */
+  let listExpanded = false;
+
+  /* Formatea la etiqueta del día (Hoy / Ayer / lun. 9 jun.) */
+  function formatDayLabel(iso) {
+    const d   = new Date(iso);
+    const now = new Date();
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    if (d.toDateString() === now.toDateString())       return 'Hoy';
+    if (d.toDateString() === yesterday.toDateString()) return 'Ayer';
+    const sameYear = d.getFullYear() === now.getFullYear();
+    return d.toLocaleDateString('es-ES', sameYear
+      ? { weekday: 'short', day: 'numeric', month: 'short' }
+      : { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+
+  /* Construye un <li> de movimiento */
+  function buildMovCell(mov) {
+    const isIncome = mov._t === 'income';
+    let emoji, bg, name, sub;
+    const time = new Date(mov.date).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+    if (isIncome) {
+      const s = getIncomStyle(mov.concept || '');
+      emoji = s.emoji; bg = s.bg;
+      name = mov.concept || 'Ingreso';
+      sub  = time;
+    } else {
+      const { cat, concept } = resolveExpense(mov);
+      emoji = cat.emoji; bg = catBg(cat.key);
+      name  = concept || cat.label;
+      sub   = (concept ? cat.label + ' · ' : '') + time;
+    }
+    const li = document.createElement('li');
+    li.className = 'mov-cell';
+    li.innerHTML = `
+      <div class="mov-icon" style="${bg}">${emoji}</div>
+      <div class="mov-info">
+        <p class="mov-name">${escapeHtml(name)}</p>
+        <p class="mov-date">${escapeHtml(sub)}</p>
+      </div>
+      <div class="mov-right">
+        <span class="${isIncome ? 'mov-amount-pos' : 'mov-amount-neg'}">
+          ${isIncome ? '+' : '−'}€${mov.amount.toFixed(2)}
+        </span>
+        <button class="mov-delete" data-id="${mov.id}" data-type="${mov._t}" aria-label="Eliminar">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:16px;height:16px;pointer-events:none">
+            <path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clip-rule="evenodd" />
+          </svg>
+        </button>
+      </div>`;
+    return li;
+  }
+
   function renderMovements() {
     const list    = $('expense-list');
+    const footer  = $('movements-footer');
     const empty   = $('empty-state');
     const countEl = $('expense-count');
-    list.innerHTML = '';
+    list.innerHTML   = '';
+    if (footer) footer.innerHTML = '';
 
-    const movements = [
+    const all = [
       ...state.expenses.map(e => ({ ...e, _t: 'expense' })),
       ...state.incomes.map(i  => ({ ...i, _t: 'income'  })),
     ].sort((a, b) => new Date(b.date) - new Date(a.date));
 
-    const n = movements.length;
+    const n = all.length;
     if (countEl) countEl.textContent = `${n} movimiento${n !== 1 ? 's' : ''}`;
 
     if (n === 0) { empty.classList.remove('hidden'); return; }
     empty.classList.add('hidden');
 
-    movements.forEach(mov => {
-      const isIncome = mov._t === 'income';
-      let emoji, bg, name, sub;
-      if (isIncome) {
-        const s = getIncomStyle(mov.concept || '');
-        emoji = s.emoji; bg = s.bg;
-        name = mov.concept || 'Ingreso';
-        sub  = formatDate(mov.date);
-      } else {
-        const { cat, concept } = resolveExpense(mov);
-        emoji = cat.emoji; bg = catBg(cat.key);
-        name = concept ? concept : cat.label;
-        sub  = (concept ? cat.label + ' · ' : '') + formatDate(mov.date);
-      }
+    const toShow = listExpanded ? all : all.slice(0, 3);
 
-      const li = document.createElement('li');
-      li.className = 'mov-cell';
-      li.innerHTML = `
-        <div class="mov-icon" style="${bg}">${emoji}</div>
-        <div class="mov-info">
-          <p class="mov-name">${escapeHtml(name)}</p>
-          <p class="mov-date">${escapeHtml(sub)}</p>
-        </div>
-        <div class="mov-right">
-          <span class="${isIncome ? 'mov-amount-pos' : 'mov-amount-neg'}">
-            ${isIncome ? '+' : '−'}€${mov.amount.toFixed(2)}
-          </span>
-          <button
-            class="mov-delete"
-            data-id="${mov.id}"
-            data-type="${mov._t}"
-            aria-label="Eliminar"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:16px;height:16px;pointer-events:none">
-              <path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clip-rule="evenodd" />
-            </svg>
-          </button>
-        </div>
-      `;
-      list.appendChild(li);
+    // Agrupar por día
+    const dayMap = new Map();
+    toShow.forEach(m => {
+      const key = new Date(m.date).toDateString();
+      if (!dayMap.has(key)) dayMap.set(key, { label: formatDayLabel(m.date), items: [] });
+      dayMap.get(key).items.push(m);
     });
+
+    // Renderizar grupos
+    dayMap.forEach(({ label, items }) => {
+      // Cabecera del día
+      const headerLi = document.createElement('li');
+      headerLi.className = 'mov-day-header';
+      headerLi.textContent = label;
+      list.appendChild(headerLi);
+
+      // Tarjeta de items del día
+      const groupLi = document.createElement('li');
+      groupLi.className = 'mov-group';
+      const inner = document.createElement('ul');
+      inner.className = 'mov-group-inner';
+      items.forEach(m => inner.appendChild(buildMovCell(m)));
+      groupLi.appendChild(inner);
+      list.appendChild(groupLi);
+    });
+
+    // Botón ver más / ver menos
+    if (!footer) return;
+    if (n > 3) {
+      const btn = document.createElement('button');
+      if (!listExpanded) {
+        btn.className   = 'see-more-btn';
+        btn.textContent = `Ver todos los movimientos · ${n - 3} más`;
+        btn.addEventListener('click', () => { listExpanded = true;  renderMovements(); });
+      } else {
+        btn.className   = 'see-more-btn see-less-btn';
+        btn.textContent = 'Ver menos';
+        btn.addEventListener('click', () => { listExpanded = false; renderMovements(); });
+      }
+      footer.appendChild(btn);
+    }
   }
 
   /* Agrupa una lista de gastos por categoría → [{cat,total,items[]}] desc */
@@ -466,6 +524,7 @@
     localStorage.removeItem(KEYS.incomes);
     localStorage.removeItem(KEYS.onboarded);
 
+    listExpanded = false;
     $('input-concept').value = '';
     state.category = 'comida';
     renderCategoryButton();
@@ -561,6 +620,7 @@
 
   function confirmClearAll() {
     closeClearModal();
+    listExpanded   = false;
     state.expenses = [];
     state.incomes  = [];
     saveExpenses();
