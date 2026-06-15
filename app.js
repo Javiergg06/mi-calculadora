@@ -1052,17 +1052,21 @@
       try { aiAnalysis = await getMonthlyAIAnalysis(monthLabelCap, mExp, mInc, cats, totalSpent, totalIncome); } catch (_) {}
 
       // 3. Maquetar el informe editorial y generar el PDF con html2pdf.js
+      //    Se adapta al dispositivo: A4 en escritorio, A5 (vertical y legible) en móvil
       setLoadingText('Maquetando el informe…');
+      const mobile   = isMobileViewport();
+      const docWidth = mobile ? 420 : 794;
       const reportHtml = buildReportDoc({
         monthLabel: monthLabelCap,
         totalSpent, totalIncome, netBalance,
         groups, mExp, mInc, aiAnalysis,
+        mobile, docWidth,
       });
 
       setLoadingText('Generando PDF…');
-      await generatePDF(reportHtml, monthLabelCap);
+      await generatePDF(reportHtml, monthLabelCap, mobile, docWidth);
 
-      $('btn-download-success').onclick = () => generatePDF(reportHtml, monthLabelCap);
+      $('btn-download-success').onclick = () => generatePDF(reportHtml, monthLabelCap, mobile, docWidth);
       showReportState('success');
 
     } catch (err) {
@@ -1112,16 +1116,40 @@
   // ── Generación del PDF con html2pdf.js ──
   function barColorFor(key) {
     return ({
-      comida: '#FF9500', ocio: '#5E5CE6', supermercado: '#30D158',
-      transporte: '#007AFF', otros: '#8E8E93',
-    })[key] || '#8E8E93';
+      comida: '#E8743B', ocio: '#6E56CF', supermercado: '#2FA86A',
+      transporte: '#2D7FF9', otros: '#9AA0A6',
+    })[key] || '#9AA0A6';
   }
 
-  async function generatePDF(html, monthLabel) {
+  function isMobileViewport() {
+    return window.matchMedia('(max-width: 600px)').matches;
+  }
+
+  // Gráfico de donut (SVG) con la distribución del gasto por categoría
+  function donutSVG(groups, total) {
+    const cx = 80, cy = 80, r = 58, sw = 22, circ = 2 * Math.PI * r;
+    let offset = 0;
+    const arcs = groups.map((g) => {
+      const frac = total > 0 ? g.total / total : 0;
+      const len  = Math.max(frac * circ - 1.2, 0); // -1.2 → pequeño hueco entre arcos
+      const dash = len.toFixed(2) + ' ' + (circ - len).toFixed(2);
+      const c = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${barColorFor(g.cat.key)}" stroke-width="${sw}" stroke-linecap="butt" stroke-dasharray="${dash}" stroke-dashoffset="${(-offset).toFixed(2)}" transform="rotate(-90 ${cx} ${cy})"/>`;
+      offset += frac * circ;
+      return c;
+    }).join('');
+    return `<svg width="160" height="160" viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#F1EEE8" stroke-width="${sw}"/>
+      ${arcs}
+    </svg>`;
+  }
+
+  async function generatePDF(html, monthLabel, mobile, docWidth) {
     if (typeof html2pdf === 'undefined') {
       throw new Error('El generador de PDF aún se está cargando. Espera unos segundos e inténtalo de nuevo.');
     }
+    const w = docWidth || (mobile ? 420 : 794);
     const stage = $('pdf-stage');
+    stage.style.width = w + 'px';
     stage.innerHTML = html;
     const target = stage.querySelector('.pdfdoc');
 
@@ -1130,75 +1158,108 @@
     const safe = monthLabel.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, '-');
     try {
       await html2pdf().set({
-        margin:      [10, 10, 12, 10],
+        margin:      mobile ? [7, 7, 9, 7] : [12, 12, 14, 12],
         filename:    'flux-informe-' + safe + '.pdf',
         image:       { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', windowWidth: 794 },
-        jsPDF:       { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        pagebreak:   { mode: ['css', 'legacy'], avoid: ['.cat-group', '.ai-card', '.summary', '.report-head'] },
+        html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', windowWidth: w },
+        jsPDF:       { unit: 'mm', format: mobile ? 'a5' : 'a4', orientation: 'portrait' },
+        pagebreak:   { mode: ['css', 'legacy'], avoid: ['.cat-block', '.ai-card', '.hero', '.chart-card', '.lg-row', '.cb-item'] },
       }).from(target).save();
     } finally {
       stage.innerHTML = '';
+      stage.style.width = '';
     }
   }
 
-  // ── Documento del informe (HTML agrupado por categoría) ──
-  function buildReportDoc({ monthLabel, totalSpent, totalIncome, netBalance, groups, mExp, mInc, aiAnalysis }) {
+  // ── Documento del informe (diseño editorial minimalista) ──
+  function buildReportDoc({ monthLabel, totalSpent, totalIncome, netBalance, groups, mExp, mInc, aiAnalysis, mobile, docWidth }) {
+    const w = docWidth || (mobile ? 420 : 794);
+    const pad = mobile ? 22 : 40;
     const genDate = new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' });
     const genTime = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+    const netPos  = netBalance >= 0;
+    const fmt = (n) => n.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-    // ── Grupos de gastos por categoría (con sus conceptos) ──
-    const groupBlocks = groups.length === 0
-      ? `<p class="muted-note">Sin gastos registrados en ${escapeHtml(monthLabel)}.</p>`
+    // ── Leyenda + donut ──
+    let chartCard = '';
+    if (groups.length > 0 && totalSpent > 0) {
+      const legend = groups.map((g) => {
+        const pct = (g.total / totalSpent) * 100;
+        return `
+          <div class="lg-row">
+            <span class="lg-dot" style="background:${barColorFor(g.cat.key)}"></span>
+            <span class="lg-label">${escapeHtml(g.cat.label)}</span>
+            <span class="lg-pct">${pct.toFixed(0)}%</span>
+            <span class="lg-amt">€${fmt(g.total)}</span>
+          </div>`;
+      }).join('');
+      chartCard = `
+        <p class="cap">Distribución del gasto</p>
+        <div class="chart-card">
+          <div class="donut-wrap">
+            ${donutSVG(groups, totalSpent)}
+            <div class="donut-center">
+              <span class="donut-total">€${fmt(totalSpent)}</span>
+              <span class="donut-cap">GASTADO</span>
+            </div>
+          </div>
+          <div class="legend">${legend}</div>
+        </div>`;
+    }
+
+    // ── Detalle por categoría ──
+    const catBlocks = groups.length === 0
+      ? `<p class="empty-note">Sin gastos registrados en ${escapeHtml(monthLabel)}.</p>`
       : groups.map((g) => {
           const pct = totalSpent > 0 ? (g.total / totalSpent) * 100 : 0;
           const color = barColorFor(g.cat.key);
           const items = g.items.map((it) => {
             const d = new Date(it.date).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
             return `
-              <li class="cg-item">
-                <span class="cg-item-name">${escapeHtml(it.concept)}</span>
-                <span class="cg-item-date">${d}</span>
-                <span class="cg-item-amt">€${it.amount.toFixed(2)}</span>
+              <li class="cb-item">
+                <span class="cb-item-name">${escapeHtml(it.concept || g.cat.label)}</span>
+                <span class="cb-item-date">${d}</span>
+                <span class="cb-item-amt">€${fmt(it.amount)}</span>
               </li>`;
           }).join('');
           return `
-            <div class="cat-group">
-              <div class="cg-head">
-                <span class="cg-emoji">${g.cat.emoji}</span>
-                <span class="cg-label">${escapeHtml(g.cat.label)}</span>
-                <span class="cg-total">€${g.total.toFixed(2)}</span>
+            <div class="cat-block">
+              <div class="cb-head">
+                <span class="cb-emoji" style="${catBg(g.cat.key)}">${g.cat.emoji}</span>
+                <span class="cb-label">${escapeHtml(g.cat.label)}</span>
+                <span class="cb-total">€${fmt(g.total)}</span>
               </div>
-              <div class="cg-track"><div class="cg-bar" style="width:${pct.toFixed(1)}%;background:${color}"></div></div>
-              <span class="cg-pct">${pct.toFixed(0)}% del gasto · ${g.items.length} movimiento${g.items.length !== 1 ? 's' : ''}</span>
-              <ul class="cg-items">${items}</ul>
+              <div class="cb-track"><div class="cb-fill" style="width:${pct.toFixed(1)}%;background:${color}"></div></div>
+              <p class="cb-meta">${pct.toFixed(0)}% del gasto · ${g.items.length} movimiento${g.items.length !== 1 ? 's' : ''}</p>
+              <ul class="cb-items">${items}</ul>
             </div>`;
         }).join('');
 
-    // ── Ingresos (si hay) ──
+    // ── Ingresos ──
     let incomeBlock = '';
     if (mInc.length > 0) {
       const incItems = [...mInc].sort((a, b) => b.amount - a.amount).map((i) => {
         const d = new Date(i.date).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
         return `
-          <li class="cg-item">
-            <span class="cg-item-name">${escapeHtml(i.concept || 'Ingreso')}</span>
-            <span class="cg-item-date">${d}</span>
-            <span class="cg-item-amt amt-pos">+€${i.amount.toFixed(2)}</span>
+          <li class="cb-item">
+            <span class="cb-item-name">${escapeHtml(i.concept || 'Ingreso')}</span>
+            <span class="cb-item-date">${d}</span>
+            <span class="cb-item-amt" style="color:#1E874B">+€${fmt(i.amount)}</span>
           </li>`;
       }).join('');
       incomeBlock = `
-        <div class="cat-group">
-          <div class="cg-head">
-            <span class="cg-emoji">💰</span>
-            <span class="cg-label">Ingresos</span>
-            <span class="cg-total" style="color:#047857">+€${totalIncome.toFixed(2)}</span>
+        <p class="cap">Ingresos</p>
+        <div class="cat-block">
+          <div class="cb-head">
+            <span class="cb-emoji" style="background:#E7F6EC">💰</span>
+            <span class="cb-label">Total ingresado</span>
+            <span class="cb-total" style="color:#1E874B">+€${fmt(totalIncome)}</span>
           </div>
-          <ul class="cg-items">${incItems}</ul>
+          <ul class="cb-items">${incItems}</ul>
         </div>`;
     }
 
-    // ── Bloque IA (POSITIVOS / MEJORAS) con fallback local ──
+    // ── Análisis IA ──
     let aiBlock = '';
     const cleanAI = (s) => (s || '').replace(/\*/g, '').trim();
     if (aiAnalysis) {
@@ -1206,124 +1267,131 @@
       const mejMatch = aiAnalysis.match(/MEJORAS:?\s*([\s\S]*?)$/i);
       const posText  = posMatch ? cleanAI(posMatch[1]) : '';
       const mejText  = mejMatch ? cleanAI(mejMatch[1]) : '';
-      if (posText) aiBlock += `<div class="ai-card ai-card-pos"><p class="ai-card-cap">Lo mejor de este mes</p><p class="ai-card-text">${escapeHtml(posText)}</p></div>`;
-      if (mejText) aiBlock += `<div class="ai-card ai-card-mej"><p class="ai-card-cap">Áreas de mejora</p><p class="ai-card-text">${escapeHtml(mejText)}</p></div>`;
+      if (posText) aiBlock += `<div class="ai-card"><p class="ai-cap">Lo mejor de este mes</p><p class="ai-text">${escapeHtml(posText)}</p></div>`;
+      if (mejText) aiBlock += `<div class="ai-card mej"><p class="ai-cap">Áreas de mejora</p><p class="ai-text">${escapeHtml(mejText)}</p></div>`;
     }
     if (!aiBlock) {
       const advice = generateSmartReply('consejo para ahorrar');
-      aiBlock = `<div class="ai-card ai-card-pos"><p class="ai-card-cap">Consejo de ahorro</p><p class="ai-card-text">${escapeHtml(advice)}</p></div>`;
+      aiBlock = `<div class="ai-card"><p class="ai-cap">Consejo de ahorro</p><p class="ai-text">${escapeHtml(advice)}</p></div>`;
     }
 
-    const netPos = netBalance >= 0;
-
-    return `<div class="pdfdoc">
+    return `<div class="pdfdoc${mobile ? ' mob' : ''}">
 <style>
-  .pdfdoc{ font-family:'Inter',sans-serif; color:#0F172A; background:#fff; width:794px; padding:40px 44px; font-size:12px; line-height:1.5; }
+  .pdfdoc{ font-family:'Inter',sans-serif; color:#1A1714; background:#FFFFFF; width:${w}px; padding:${pad}px; font-size:12px; line-height:1.55; -webkit-font-smoothing:antialiased; }
   .pdfdoc *{ margin:0; padding:0; box-sizing:border-box; }
-  .pdfdoc .report-head{ display:flex; justify-content:space-between; align-items:flex-start; padding-bottom:20px; border-bottom:2px solid #0F172A; margin-bottom:26px; }
-  .pdfdoc .brand-row{ display:flex; align-items:center; gap:9px; margin-bottom:14px; }
-  .pdfdoc .brand-mark{ width:30px; height:30px; border-radius:8px; background:linear-gradient(145deg,#0F172A,#1E3A8A); color:#fff; display:flex; align-items:center; justify-content:center; font-size:15px; }
-  .pdfdoc .brand-name{ font-size:12px; font-weight:700; letter-spacing:0.22em; text-transform:uppercase; color:#64748B; }
-  .pdfdoc .report-eyebrow{ font-size:11px; font-weight:600; letter-spacing:0.16em; text-transform:uppercase; color:#A16207; margin-bottom:4px; }
-  .pdfdoc .report-title{ font-family:'Playfair Display',Georgia,serif; font-size:38px; font-weight:700; letter-spacing:-0.5px; line-height:1.05; color:#0F172A; }
-  .pdfdoc .report-meta{ text-align:right; font-size:11px; color:#64748B; line-height:1.7; padding-top:4px; }
-  .pdfdoc .report-meta strong{ display:block; font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.1em; color:#94A3B8; margin-bottom:2px; }
-  .pdfdoc .summary{ display:flex; gap:14px; margin-bottom:30px; }
-  .pdfdoc .sum-box{ flex:1; border:1px solid #E2E8F0; border-radius:14px; padding:18px 20px; background:#F8FAFC; }
-  .pdfdoc .sum-box.feature{ background:linear-gradient(150deg,#0F172A,#1E3A8A); border:none; }
-  .pdfdoc .sum-cap{ font-size:9.5px; font-weight:600; text-transform:uppercase; letter-spacing:0.14em; color:#64748B; margin-bottom:8px; }
-  .pdfdoc .sum-box.feature .sum-cap{ color:rgba(255,255,255,0.6); }
-  .pdfdoc .sum-num{ font-family:'Playfair Display',Georgia,serif; font-size:27px; font-weight:600; letter-spacing:-0.5px; }
-  .pdfdoc .sum-box.feature .sum-num{ color:#fff; }
-  .pdfdoc .sum-sub{ margin-top:4px; font-size:10px; color:#64748B; }
-  .pdfdoc .sum-box.feature .sum-sub{ color:rgba(255,255,255,0.55); }
-  .pdfdoc .accent-bar{ height:3px; width:34px; background:#A16207; border-radius:2px; margin-top:12px; }
-  .pdfdoc .section-cap{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.16em; color:#A16207; margin-bottom:16px; }
-  .pdfdoc .muted-note{ font-size:12px; color:#94A3B8; font-style:italic; padding:8px 0; }
-  .pdfdoc .cat-group{ border:1px solid #E2E8F0; border-radius:14px; padding:16px 18px; margin-bottom:14px; background:#fff; page-break-inside:avoid; break-inside:avoid; }
-  .pdfdoc .cg-head{ display:flex; align-items:center; gap:10px; margin-bottom:9px; }
-  .pdfdoc .cg-emoji{ font-size:20px; }
-  .pdfdoc .cg-label{ flex:1; font-size:15px; font-weight:700; color:#0F172A; }
-  .pdfdoc .cg-total{ font-size:16px; font-weight:800; color:#0F172A; font-variant-numeric:tabular-nums; }
-  .pdfdoc .cg-track{ height:5px; background:#EEF2F7; border-radius:99px; overflow:hidden; margin-bottom:4px; }
-  .pdfdoc .cg-bar{ height:100%; border-radius:99px; }
-  .pdfdoc .cg-pct{ display:block; font-size:9.5px; color:#94A3B8; margin-bottom:10px; }
-  .pdfdoc .cg-items{ list-style:none; border-top:1px solid #F1F5F9; }
-  .pdfdoc .cg-item{ display:flex; align-items:center; gap:10px; padding:7px 0; border-bottom:0.5px solid #F1F5F9; }
-  .pdfdoc .cg-item:last-child{ border-bottom:none; }
-  .pdfdoc .cg-item-name{ flex:1; font-size:12.5px; font-weight:500; color:#1E293B; }
-  .pdfdoc .cg-item-date{ font-size:10px; color:#94A3B8; white-space:nowrap; }
-  .pdfdoc .cg-item-amt{ font-size:12.5px; font-weight:700; color:#B91C1C; font-variant-numeric:tabular-nums; min-width:64px; text-align:right; }
-  .pdfdoc .cg-item-amt.amt-pos{ color:#047857; }
-  .pdfdoc .ai-section{ margin-top:26px; }
-  .pdfdoc .ai-head{ display:flex; align-items:center; gap:10px; margin-bottom:14px; }
-  .pdfdoc .ai-badge{ width:30px; height:30px; border-radius:9px; background:linear-gradient(145deg,#0F172A,#1E3A8A); color:#fff; display:flex; align-items:center; justify-content:center; font-size:15px; }
-  .pdfdoc .ai-title{ font-size:13px; font-weight:700; color:#0F172A; }
-  .pdfdoc .ai-sub{ font-size:9px; font-weight:500; text-transform:uppercase; letter-spacing:0.12em; color:#A16207; }
-  .pdfdoc .ai-card{ border:1px solid #E2E8F0; border-radius:14px; background:#F8FAFC; padding:18px 20px; margin-bottom:12px; position:relative; overflow:hidden; page-break-inside:avoid; break-inside:avoid; }
-  .pdfdoc .ai-card::before{ content:''; position:absolute; left:0; top:0; bottom:0; width:4px; }
-  .pdfdoc .ai-card-pos::before{ background:#047857; }
-  .pdfdoc .ai-card-mej::before{ background:#A16207; }
-  .pdfdoc .ai-card-cap{ font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:7px; }
-  .pdfdoc .ai-card-pos .ai-card-cap{ color:#047857; }
-  .pdfdoc .ai-card-mej .ai-card-cap{ color:#A16207; }
-  .pdfdoc .ai-card-text{ font-size:12px; line-height:1.65; color:#0F172A; white-space:pre-wrap; }
-  .pdfdoc .report-foot{ margin-top:28px; padding-top:14px; border-top:1px solid #E2E8F0; display:flex; justify-content:space-between; font-size:9px; color:#94A3B8; letter-spacing:0.04em; }
+
+  .pdfdoc .mast{ display:flex; justify-content:space-between; align-items:flex-end; padding-bottom:13px; border-bottom:1.5px solid #1A1714; margin-bottom:28px; }
+  .pdfdoc .mast-brand{ display:flex; align-items:center; gap:7px; }
+  .pdfdoc .mast-mark{ width:26px; height:26px; border-radius:8px; background:#1A1714; color:#fff; display:flex; align-items:center; justify-content:center; font-size:14px; }
+  .pdfdoc .mast-word{ font-size:18px; font-weight:800; letter-spacing:4px; }
+  .pdfdoc .mast-meta{ text-align:right; }
+  .pdfdoc .mast-eyebrow{ font-size:8.5px; font-weight:700; letter-spacing:2.5px; text-transform:uppercase; color:#A8A29B; }
+  .pdfdoc .mast-month{ font-family:'Fraunces',Georgia,serif; font-size:15px; font-weight:600; margin-top:2px; }
+
+  .pdfdoc .hero{ display:flex; justify-content:space-between; align-items:flex-end; gap:24px; margin-bottom:32px; }
+  .pdfdoc .hero-eyebrow{ font-size:9.5px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:#A8A29B; margin-bottom:8px; }
+  .pdfdoc .hero-num{ font-family:'Fraunces',Georgia,serif; font-size:56px; font-weight:600; letter-spacing:-1.5px; line-height:0.92; }
+  .pdfdoc .hero-num.pos{ color:#1E874B; } .pdfdoc .hero-num.neg{ color:#C0392B; }
+  .pdfdoc .hero-sub{ font-size:12px; color:#6B6560; margin-top:10px; }
+  .pdfdoc .hero-stats{ display:flex; flex-direction:column; gap:10px; flex-shrink:0; width:172px; }
+  .pdfdoc .hstat{ border:1px solid #ECE8E1; border-radius:13px; padding:12px 15px; }
+  .pdfdoc .hstat-cap{ font-size:8.5px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:#A8A29B; }
+  .pdfdoc .hstat-num{ font-family:'Fraunces',Georgia,serif; font-size:21px; font-weight:600; margin-top:3px; }
+  .pdfdoc .hstat-num.pos{ color:#1E874B; } .pdfdoc .hstat-num.neg{ color:#C0392B; }
+
+  .pdfdoc .cap{ font-size:10px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:#1A1714; margin-bottom:14px; display:flex; align-items:center; gap:12px; }
+  .pdfdoc .cap::after{ content:''; flex:1; height:1px; background:#ECE8E1; }
+  .pdfdoc .empty-note{ font-size:12px; color:#A8A29B; font-style:italic; padding:6px 0 18px; }
+
+  .pdfdoc .chart-card{ border:1px solid #ECE8E1; border-radius:18px; padding:22px 24px; margin-bottom:30px; display:flex; align-items:center; gap:28px; }
+  .pdfdoc .donut-wrap{ position:relative; width:160px; height:160px; flex-shrink:0; }
+  .pdfdoc .donut-center{ position:absolute; left:0; top:0; right:0; bottom:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  .pdfdoc .donut-total{ font-family:'Fraunces',Georgia,serif; font-size:23px; font-weight:600; }
+  .pdfdoc .donut-cap{ font-size:8px; font-weight:700; letter-spacing:2px; color:#A8A29B; margin-top:3px; }
+  .pdfdoc .legend{ flex:1; }
+  .pdfdoc .lg-row{ display:flex; align-items:center; gap:11px; padding:8px 0; border-bottom:1px solid #F4F1EC; }
+  .pdfdoc .lg-row:last-child{ border-bottom:none; }
+  .pdfdoc .lg-dot{ width:11px; height:11px; border-radius:3px; flex-shrink:0; }
+  .pdfdoc .lg-label{ flex:1; font-size:13px; font-weight:500; }
+  .pdfdoc .lg-pct{ font-size:11px; color:#A8A29B; min-width:34px; text-align:right; }
+  .pdfdoc .lg-amt{ font-size:13px; font-weight:700; min-width:70px; text-align:right; font-variant-numeric:tabular-nums; }
+
+  .pdfdoc .cat-block{ border:1px solid #ECE8E1; border-radius:16px; padding:15px 18px; margin-bottom:11px; page-break-inside:avoid; break-inside:avoid; }
+  .pdfdoc .cb-head{ display:flex; align-items:center; gap:11px; margin-bottom:10px; }
+  .pdfdoc .cb-emoji{ width:34px; height:34px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:16px; flex-shrink:0; }
+  .pdfdoc .cb-label{ flex:1; font-size:15px; font-weight:700; }
+  .pdfdoc .cb-total{ font-family:'Fraunces',Georgia,serif; font-size:18px; font-weight:600; font-variant-numeric:tabular-nums; }
+  .pdfdoc .cb-track{ height:6px; background:#F1EEE8; border-radius:99px; overflow:hidden; margin-bottom:5px; }
+  .pdfdoc .cb-fill{ height:100%; border-radius:99px; }
+  .pdfdoc .cb-meta{ font-size:9.5px; color:#A8A29B; letter-spacing:0.3px; margin-bottom:9px; }
+  .pdfdoc .cb-items{ list-style:none; border-top:1px solid #F4F1EC; padding-top:3px; }
+  .pdfdoc .cb-item{ display:flex; align-items:center; gap:10px; padding:5px 0; }
+  .pdfdoc .cb-item-name{ flex:1; font-size:12px; font-weight:500; color:#3A3530; }
+  .pdfdoc .cb-item-date{ font-size:10px; color:#A8A29B; white-space:nowrap; }
+  .pdfdoc .cb-item-amt{ font-size:12px; font-weight:600; font-variant-numeric:tabular-nums; min-width:62px; text-align:right; }
+
+  .pdfdoc .ai-section{ margin-top:30px; }
+  .pdfdoc .ai-card{ border:1px solid #ECE8E1; border-left:3px solid #1E874B; border-radius:12px; padding:15px 18px; margin-bottom:10px; page-break-inside:avoid; break-inside:avoid; }
+  .pdfdoc .ai-card.mej{ border-left-color:#E8743B; }
+  .pdfdoc .ai-cap{ font-size:9.5px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; margin-bottom:6px; color:#1E874B; }
+  .pdfdoc .ai-card.mej .ai-cap{ color:#E8743B; }
+  .pdfdoc .ai-text{ font-size:12px; line-height:1.6; color:#3A3530; white-space:pre-wrap; }
+
+  .pdfdoc .foot{ margin-top:28px; padding-top:13px; border-top:1px solid #ECE8E1; display:flex; justify-content:space-between; font-size:9px; color:#A8A29B; letter-spacing:0.3px; }
+
+  /* Móvil: una sola columna */
+  .pdfdoc.mob{ font-size:12.5px; }
+  .pdfdoc.mob .hero{ flex-direction:column; align-items:stretch; gap:18px; }
+  .pdfdoc.mob .hero-num{ font-size:46px; }
+  .pdfdoc.mob .hero-stats{ flex-direction:row; width:auto; }
+  .pdfdoc.mob .hstat{ flex:1; }
+  .pdfdoc.mob .chart-card{ flex-direction:column; gap:18px; padding:20px; }
+  .pdfdoc.mob .legend{ width:100%; }
 </style>
 
-  <div class="report-head">
+  <div class="mast">
+    <div class="mast-brand">
+      <div class="mast-mark">⚡</div>
+      <span class="mast-word">FLUX</span>
+    </div>
+    <div class="mast-meta">
+      <p class="mast-eyebrow">Informe mensual</p>
+      <p class="mast-month">${escapeHtml(monthLabel)}</p>
+    </div>
+  </div>
+
+  <div class="hero">
     <div>
-      <div class="brand-row">
-        <div class="brand-mark">⚡</div>
-        <span class="brand-name">Flux · Finanzas</span>
+      <p class="hero-eyebrow">Balance neto del mes</p>
+      <p class="hero-num ${netPos ? 'pos' : 'neg'}">${netPos ? '+' : '−'}€${fmt(Math.abs(netBalance))}</p>
+      <p class="hero-sub">${netPos ? 'Has ahorrado este mes. ¡Buen trabajo! 💪' : 'Este mes has gastado más de lo ingresado.'}</p>
+    </div>
+    <div class="hero-stats">
+      <div class="hstat">
+        <p class="hstat-cap">Ingresos</p>
+        <p class="hstat-num pos">+€${fmt(totalIncome)}</p>
       </div>
-      <p class="report-eyebrow">Informe mensual</p>
-      <h1 class="report-title">${escapeHtml(monthLabel)}</h1>
-    </div>
-    <div class="report-meta">
-      <strong>Generado</strong>
-      ${genDate}<br>${genTime}
+      <div class="hstat">
+        <p class="hstat-cap">Gastos</p>
+        <p class="hstat-num neg">−€${fmt(totalSpent)}</p>
+      </div>
     </div>
   </div>
 
-  <div class="summary">
-    <div class="sum-box feature">
-      <p class="sum-cap">Balance Neto</p>
-      <p class="sum-num">${netPos ? '+' : '−'}€${Math.abs(netBalance).toFixed(2)}</p>
-      <p class="sum-sub">${netPos ? 'Has ahorrado este mes' : 'Has gastado de más'}</p>
-    </div>
-    <div class="sum-box">
-      <p class="sum-cap">Ingresos</p>
-      <p class="sum-num" style="color:#047857">+€${totalIncome.toFixed(2)}</p>
-      <p class="sum-sub">${mInc.length} ingreso${mInc.length !== 1 ? 's' : ''}</p>
-      <div class="accent-bar"></div>
-    </div>
-    <div class="sum-box">
-      <p class="sum-cap">Gastos</p>
-      <p class="sum-num" style="color:#B91C1C">−€${totalSpent.toFixed(2)}</p>
-      <p class="sum-sub">${mExp.length} gasto${mExp.length !== 1 ? 's' : ''}</p>
-      <div class="accent-bar"></div>
-    </div>
-  </div>
+  ${chartCard}
 
-  <p class="section-cap">Gastos agrupados por categoría</p>
-  ${groupBlocks}
+  <p class="cap">Detalle por categoría</p>
+  ${catBlocks}
   ${incomeBlock}
 
   <div class="ai-section">
-    <div class="ai-head">
-      <div class="ai-badge">⚡</div>
-      <div>
-        <div class="ai-title">Flux AI</div>
-        <div class="ai-sub">Análisis inteligente</div>
-      </div>
-    </div>
+    <p class="cap">Análisis Flux AI</p>
     ${aiBlock}
   </div>
 
-  <div class="report-foot">
-    <span>Flux · Generado localmente en tu dispositivo</span>
-    <span>Documento confidencial</span>
+  <div class="foot">
+    <span>Flux · Generado localmente en tu dispositivo · ${genDate} ${genTime}</span>
+    <span>Confidencial</span>
   </div>
 </div>`;
   }
