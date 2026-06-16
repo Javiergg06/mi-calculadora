@@ -70,13 +70,19 @@
 
   let keypadInput = ''; // cadena construida por el teclado numérico
 
-  /* Subcategorías guardadas por el usuario, por categoría (global, persistente) */
+  /* Subcategorías guardadas por el usuario, por categoría y POR CUENTA */
   let SUBCATS = {}; // { comida: ['Burger King', ...], ocio: [...], ... }
   function loadSubcats() {
-    try { SUBCATS = JSON.parse(localStorage.getItem('fx_subcats') || '{}') || {}; }
+    // Migración: subcategorías globales antiguas → cuenta activa (una sola vez)
+    const legacy = localStorage.getItem('fx_subcats');
+    if (legacy !== null && localStorage.getItem(accKey('subcats')) === null) {
+      localStorage.setItem(accKey('subcats'), legacy);
+      localStorage.removeItem('fx_subcats');
+    }
+    try { SUBCATS = JSON.parse(localStorage.getItem(accKey('subcats')) || '{}') || {}; }
     catch { SUBCATS = {}; }
   }
-  function saveSubcats() { localStorage.setItem('fx_subcats', JSON.stringify(SUBCATS)); }
+  function saveSubcats() { localStorage.setItem(accKey('subcats'), JSON.stringify(SUBCATS)); }
   function subcatsFor(key) { return Array.isArray(SUBCATS[key]) ? SUBCATS[key] : []; }
 
   /* Carga la lista de cuentas; migra datos antiguos la primera vez */
@@ -1024,6 +1030,7 @@
     if (id === activeAccountId) return;
     setActiveAccount(id);
     loadState();
+    loadSubcats();          // subcategorías propias de esta cuenta
     resetVolatileUI();
     renderAccountName();
     renderAll();
@@ -1048,8 +1055,9 @@
     saveAccounts();
     setActiveAccount(id);
 
-    // Cuenta nueva → estado vacío
+    // Cuenta nueva → estado y subcategorías vacíos
     state.balance = 0; state.expenses = []; state.incomes = [];
+    loadSubcats();
     resetVolatileUI();
     renderAccountName();
     closeAccountModal();
