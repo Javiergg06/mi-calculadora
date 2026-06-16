@@ -307,6 +307,16 @@
   let listExpanded = false;
   let statsFilter  = 'all'; // 'all' | clave de categoría
 
+  // Estado del calendario
+  const calState = {
+    year:  new Date().getFullYear(),
+    month: new Date().getMonth(), // 0-indexado
+    mode:  'active',              // 'active' | 'all'
+    selectedDay: null,
+  };
+  let daySelToken   = 0;   // evita carreras al pedir consejos IA por día
+  const dayTipCache = {};  // cachea el consejo de IA por día/modo
+
   /* Formatea la etiqueta del día (Hoy / Ayer / lun. 9 jun.) */
   function formatDayLabel(iso) {
     const d   = new Date(iso);
@@ -552,6 +562,231 @@
     renderCategoryStats();
     renderStats();
     renderTip();
+  }
+
+  /* -----------------------------------------------------------
+     5a-quater. CALENDARIO (gastos/ingresos por día + total multicuenta)
+     ----------------------------------------------------------- */
+  function readAccArray(base, id) {
+    try { return JSON.parse(localStorage.getItem('fx_' + base + '_' + id) || '[]'); } catch { return []; }
+  }
+
+  // Saldo de una cuenta (la activa se lee del estado en memoria)
+  function balanceOfAccount(id) {
+    if (id === activeAccountId) return state.balance;
+    return parseFloat(localStorage.getItem('fx_balance_' + id) || '0') || 0;
+  }
+
+  // Saldo total según el modo del calendario
+  function calTotalBalance() {
+    if (calState.mode === 'all') {
+      return accounts.reduce((s, a) => s + balanceOfAccount(a.id), 0);
+    }
+    return state.balance;
+  }
+
+  // Movimientos (gastos + ingresos) según el modo del calendario
+  function calMovements() {
+    const accs = calState.mode === 'all' ? accounts : accounts.filter(a => a.id === activeAccountId);
+    const out = [];
+    accs.forEach((a) => {
+      if (!a) return;
+      // Para la cuenta activa usamos el estado en memoria (siempre fresco)
+      const exp = a.id === activeAccountId ? state.expenses : readAccArray('expenses', a.id);
+      const inc = a.id === activeAccountId ? state.incomes  : readAccArray('incomes',  a.id);
+      exp.forEach(e => out.push({ ...e, _t: 'expense', _acc: a.name }));
+      inc.forEach(i => out.push({ ...i, _t: 'income',  _acc: a.name }));
+    });
+    return out;
+  }
+
+  function changeMonth(delta) {
+    let m = calState.month + delta, y = calState.year;
+    if (m < 0)  { m = 11; y--; }
+    if (m > 11) { m = 0;  y++; }
+    calState.month = m; calState.year = y; calState.selectedDay = null;
+    renderCalendar();
+  }
+
+  function setCalMode(mode) {
+    calState.mode = mode;
+    renderCalendar();
+  }
+
+  function selectCalDay(day) {
+    calState.selectedDay = day;
+    document.querySelectorAll('#cal-grid .cal-cell').forEach(c => {
+      c.classList.toggle('selected', Number(c.dataset.day) === day);
+    });
+    renderDayDetail(day);
+  }
+
+  function renderCalendar() {
+    if (!$('cal-grid')) return;
+
+    // ── Tarjeta de saldo ──
+    $('cal-mode-active').classList.toggle('seg-active', calState.mode === 'active');
+    $('cal-mode-all').classList.toggle('seg-active', calState.mode === 'all');
+    const bd = $('cal-total-breakdown');
+    if (calState.mode === 'all') {
+      $('cal-total-label').textContent = `Saldo total · ${accounts.length} cuenta${accounts.length !== 1 ? 's' : ''}`;
+      $('cal-total-value').textContent = formatMoney(calTotalBalance());
+      bd.classList.remove('hidden');
+      bd.innerHTML = accounts.map(a => `
+        <div class="cal-bd-row">
+          <span class="cal-bd-name">${escapeHtml(a.name)}</span>
+          <span class="cal-bd-amt">${formatMoney(balanceOfAccount(a.id))}</span>
+        </div>`).join('');
+    } else {
+      const acc = activeAccount();
+      $('cal-total-label').textContent = `Saldo · ${acc ? acc.name : ''}`;
+      $('cal-total-value').textContent = formatMoney(state.balance);
+      bd.classList.add('hidden');
+      bd.innerHTML = '';
+    }
+
+    // ── Etiqueta del mes ──
+    const monthName = new Date(calState.year, calState.month, 1)
+      .toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+    $('cal-month-label').textContent = monthName.charAt(0).toUpperCase() + monthName.slice(1);
+
+    // ── Sumas por día del mes ──
+    const movs = calMovements().filter(m => {
+      const d = new Date(m.date);
+      return d.getMonth() === calState.month && d.getFullYear() === calState.year;
+    });
+    const byDay = {};
+    movs.forEach(m => {
+      const d = new Date(m.date).getDate();
+      if (!byDay[d]) byDay[d] = { inc: 0, exp: 0 };
+      if (m._t === 'income') byDay[d].inc += m.amount; else byDay[d].exp += m.amount;
+    });
+
+    // ── Construir la rejilla (semana empieza en lunes) ──
+    const firstDow     = (new Date(calState.year, calState.month, 1).getDay() + 6) % 7;
+    const daysInMonth  = new Date(calState.year, calState.month + 1, 0).getDate();
+    const today        = new Date();
+    const isThisMonth  = today.getMonth() === calState.month && today.getFullYear() === calState.year;
+
+    let cells = '';
+    for (let i = 0; i < firstDow; i++) cells += '<div class="cal-cell empty"></div>';
+    for (let d = 1; d <= daysInMonth; d++) {
+      const info = byDay[d];
+      const dots = `<div class="cal-dots">${info && info.inc > 0 ? '<span class="cal-dot inc"></span>' : ''}${info && info.exp > 0 ? '<span class="cal-dot exp"></span>' : ''}</div>`;
+      const cls = ['cal-cell'];
+      if (info) cls.push('has');
+      if (isThisMonth && d === today.getDate()) cls.push('today');
+      if (calState.selectedDay === d) cls.push('selected');
+      cells += `<button class="${cls.join(' ')}" data-day="${d}"><span class="cal-cell-num">${d}</span>${dots}</button>`;
+    }
+    $('cal-grid').innerHTML = cells;
+
+    // ── Detalle del día ──
+    if (calState.selectedDay) renderDayDetail(calState.selectedDay);
+    else { $('cal-day-detail').classList.add('hidden'); $('cal-day-detail').innerHTML = ''; }
+  }
+
+  function renderDayDetail(day) {
+    const wrap = $('cal-day-detail');
+    if (!wrap) return;
+
+    const dateObj = new Date(calState.year, calState.month, day);
+    const label   = dateObj.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+    const labelCap = label.charAt(0).toUpperCase() + label.slice(1);
+
+    const movs = calMovements().filter(m => {
+      const d = new Date(m.date);
+      return d.getDate() === day && d.getMonth() === calState.month && d.getFullYear() === calState.year;
+    }).sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    const dayInc = movs.filter(m => m._t === 'income').reduce((s, m) => s + m.amount, 0);
+    const dayExp = movs.filter(m => m._t === 'expense').reduce((s, m) => s + m.amount, 0);
+
+    const list = movs.map(m => {
+      const isInc = m._t === 'income';
+      let emoji, bg, name;
+      if (isInc) {
+        const s = getIncomStyle(m.concept || ''); emoji = s.emoji; bg = s.bg; name = m.concept || 'Ingreso';
+      } else {
+        const r = resolveExpense(m); emoji = r.cat.emoji; bg = catBg(r.cat.key); name = r.concept || r.cat.label;
+      }
+      const time   = new Date(m.date).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+      const accTag = calState.mode === 'all' ? `<span class="cal-mv-acc">${escapeHtml(m._acc || '')}</span>` : '';
+      return `
+        <li class="mov-cell">
+          <div class="mov-icon" style="${bg}">${emoji}</div>
+          <div class="mov-info">
+            <p class="mov-name">${escapeHtml(name)}</p>
+            <p class="mov-date">${time}${accTag}</p>
+          </div>
+          <div class="mov-right">
+            <span class="${isInc ? 'mov-amount-pos' : 'mov-amount-neg'}">${isInc ? '+' : '−'}€${m.amount.toFixed(2)}</span>
+          </div>
+        </li>`;
+    }).join('');
+
+    let sums = '';
+    if (dayInc > 0) sums += `<span class="cal-sum-inc">+€${dayInc.toFixed(2)}</span>`;
+    if (dayExp > 0) sums += `<span class="cal-sum-exp">−€${dayExp.toFixed(2)}</span>`;
+    if (!sums)      sums  = `<span class="cal-sum-none">Sin movimientos</span>`;
+
+    wrap.classList.remove('hidden');
+    wrap.innerHTML = `
+      <div class="cal-detail-head">
+        <p class="cal-detail-date">${escapeHtml(labelCap)}</p>
+        <div class="cal-detail-sums">${sums}</div>
+      </div>
+      ${list ? `<ul class="movements-list cal-mv-list">${list}</ul>` : ''}
+      <div class="cal-tip">
+        <span class="cal-tip-icon">💡</span>
+        <div class="cal-tip-body">
+          <p class="cal-tip-label">Consejo de Flux AI</p>
+          <p class="cal-tip-text loading" id="cal-tip-text">Pensando un consejo…</p>
+        </div>
+      </div>`;
+
+    // Consejo de IA para el día (con fallback local)
+    const token = ++daySelToken;
+    const key   = `${calState.mode}-${calState.year}-${calState.month}-${day}`;
+    fetchDayTip(key, labelCap, dayInc, dayExp, movs).then(tip => {
+      if (token !== daySelToken) return; // el usuario ya tocó otro día
+      const el = $('cal-tip-text');
+      if (el) { el.textContent = tip; el.classList.remove('loading'); }
+    });
+  }
+
+  async function fetchDayTip(key, label, inc, exp, movs) {
+    if (dayTipCache[key]) return dayTipCache[key];
+    try {
+      const conceptos = movs.filter(m => m._t === 'expense')
+        .map(m => `${m.concept || 'gasto'} €${m.amount.toFixed(2)}`).join(', ') || 'sin gastos';
+      const message =
+        `Dame UN consejo breve (máximo 2 frases, en español, cercano y motivador) sobre mis finanzas del día ${label}. ` +
+        `Ese día ingresé €${inc.toFixed(2)} y gasté €${exp.toFixed(2)}. Gastos: ${conceptos}. ` +
+        `Responde solo con el consejo, sin encabezados ni emojis.`;
+      const context = {
+        balance: state.balance, totalSpent: exp,
+        numExpenses: movs.filter(m => m._t === 'expense').length, categories: {},
+      };
+      const res = await fetch('/api/chat', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message, context }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const tip = (data.reply || '').replace(/\*/g, '').trim();
+        if (tip) { dayTipCache[key] = tip; return tip; }
+      }
+    } catch (_) { /* sin conexión → fallback local */ }
+
+    // Fallback local
+    let tip;
+    if (inc === 0 && exp === 0)      tip = 'No registraste movimientos este día. Un día sin gastos también suma para tu ahorro. 💚';
+    else if (exp > inc && exp > 0)   tip = `Gastaste €${exp.toFixed(2)} este día. Revisa si todo era necesario y prueba a fijarte un pequeño límite diario.`;
+    else if (inc > 0)                tip = `Buen día: ingresaste €${inc.toFixed(2)}. Aparta una parte para ahorro antes de gastarla.`;
+    else                             tip = 'Pequeños gastos controlados hoy. ¡Sigue así!';
+    dayTipCache[key] = tip;
+    return tip;
   }
 
   /* -----------------------------------------------------------
@@ -855,6 +1090,17 @@
 
     const btn = document.querySelector(`.tab-item[data-page="${pageId}"]`);
     if (btn) btn.classList.add('tab-active');
+
+    // Al abrir el calendario: si es el mes actual, selecciona hoy por defecto
+    if (pageId === 'page-calendar') {
+      if (calState.selectedDay == null) {
+        const t = new Date();
+        if (t.getMonth() === calState.month && t.getFullYear() === calState.year) {
+          calState.selectedDay = t.getDate();
+        }
+      }
+      renderCalendar();
+    }
   }
 
   /* -----------------------------------------------------------
@@ -1438,6 +1684,16 @@
     $('stats-chips').addEventListener('click', e => {
       const chip = e.target.closest('.stat-chip');
       if (chip) setStatsFilter(chip.dataset.key);
+    });
+
+    // Calendario
+    $('cal-prev').addEventListener('click', () => changeMonth(-1));
+    $('cal-next').addEventListener('click', () => changeMonth(1));
+    $('cal-mode-active').addEventListener('click', () => setCalMode('active'));
+    $('cal-mode-all').addEventListener('click', () => setCalMode('all'));
+    $('cal-grid').addEventListener('click', e => {
+      const cell = e.target.closest('.cal-cell');
+      if (cell && cell.dataset.day) selectCalDay(Number(cell.dataset.day));
     });
 
     // Keypad
