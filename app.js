@@ -65,9 +65,19 @@
     incomes:  [],
     mode:     'expense', // 'expense' | 'income'
     category: 'comida',  // categoría seleccionada para el nuevo gasto
+    concept:  '',        // concepto/subcategoría elegido para el nuevo gasto
   };
 
   let keypadInput = ''; // cadena construida por el teclado numérico
+
+  /* Subcategorías guardadas por el usuario, por categoría (global, persistente) */
+  let SUBCATS = {}; // { comida: ['Burger King', ...], ocio: [...], ... }
+  function loadSubcats() {
+    try { SUBCATS = JSON.parse(localStorage.getItem('fx_subcats') || '{}') || {}; }
+    catch { SUBCATS = {}; }
+  }
+  function saveSubcats() { localStorage.setItem('fx_subcats', JSON.stringify(SUBCATS)); }
+  function subcatsFor(key) { return Array.isArray(SUBCATS[key]) ? SUBCATS[key] : []; }
 
   /* Carga la lista de cuentas; migra datos antiguos la primera vez */
   function loadAccounts() {
@@ -206,25 +216,28 @@
      ----------------------------------------------------------- */
   function setMode(mode) {
     state.mode = mode;
-    const btnE     = $('btn-mode-expense');
-    const btnI     = $('btn-mode-income');
-    const catSel   = $('btn-category');
-    const concept  = $('input-concept');
-    const btn      = $('btn-register');
-    const txt      = $('btn-register-text');
+    const btnE      = $('btn-mode-expense');
+    const btnI      = $('btn-mode-income');
+    const catSel    = $('btn-category');
+    const conceptPill = $('btn-concept');
+    const conceptWrap = $('concept-input-wrap');
+    const btn       = $('btn-register');
+    const txt       = $('btn-register-text');
 
     if (mode === 'income') {
       btnE.classList.remove('seg-active');
       btnI.classList.add('seg-active', 'income-seg');
-      catSel.classList.add('hidden');           // sin categoría en ingresos
-      concept.placeholder = 'Concepto: Nómina, Bizum, Regalo…';
+      catSel.classList.add('hidden');            // sin categoría en ingresos
+      conceptPill.classList.add('hidden');       // sin subcategorías en ingresos
+      conceptWrap.classList.remove('hidden');    // texto libre para el ingreso
       btn.classList.add('income-cta');
       txt.textContent     = 'Añadir ingreso';
     } else {
       btnI.classList.remove('seg-active', 'income-seg');
       btnE.classList.add('seg-active');
       catSel.classList.remove('hidden');
-      concept.placeholder = 'Concepto (ej. Burger King)';
+      conceptPill.classList.remove('hidden');    // pill de concepto/subcategoría
+      conceptWrap.classList.add('hidden');
       btn.classList.remove('income-cta');
       txt.textContent     = 'Añadir gasto';
     }
@@ -259,8 +272,72 @@
 
   function selectCategory(key) {
     state.category = key;
+    // El concepto/subcategoría pertenece a la categoría anterior → se limpia
+    state.concept = '';
     renderCategoryButton();
+    renderConceptButton();
     closeCategorySheet();
+  }
+
+  /* -----------------------------------------------------------
+     4c. CONCEPTO / SUBCATEGORÍAS (bottom sheet)
+     ----------------------------------------------------------- */
+  function renderConceptButton() {
+    const el = $('concept-value');
+    if (el) el.textContent = state.concept || 'Opcional';
+  }
+
+  function renderSubcatList() {
+    const cat  = catByKey(state.category);
+    const list = subcatsFor(cat.key);
+    const ul   = $('subcat-list');
+    if (list.length === 0) {
+      ul.innerHTML = '<li class="subcat-empty">Aún no tienes subcategorías en ' + escapeHtml(cat.label) + '. Crea una arriba ☝️</li>';
+      return;
+    }
+    ul.innerHTML = list.map((s) => `
+      <li class="subcat-chip ${s === state.concept ? 'is-selected' : ''}" data-name="${escapeHtml(s)}">
+        <span class="subcat-chip-label" data-pick="${escapeHtml(s)}">${escapeHtml(s)}</span>
+        <button class="subcat-chip-del" data-del="${escapeHtml(s)}" aria-label="Eliminar subcategoría">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:13px;height:13px;pointer-events:none">
+            <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+          </svg>
+        </button>
+      </li>`).join('');
+  }
+
+  function openConceptSheet() {
+    const cat = catByKey(state.category);
+    $('concept-sheet-title').textContent = 'Concepto · ' + cat.label;
+    $('subcat-input').value = '';
+    renderSubcatList();
+    $('concept-sheet').classList.remove('hidden');
+  }
+  function closeConceptSheet() { $('concept-sheet').classList.add('hidden'); }
+
+  function selectConcept(text) {
+    state.concept = text;
+    renderConceptButton();
+    closeConceptSheet();
+  }
+
+  function addSubcat(name) {
+    name = (name || '').trim();
+    if (!name) { $('subcat-input').focus(); return; }
+    const cat = catByKey(state.category);
+    if (!Array.isArray(SUBCATS[cat.key])) SUBCATS[cat.key] = [];
+    // Evitar duplicados (sin distinguir mayúsculas)
+    const exists = SUBCATS[cat.key].find((s) => s.toLowerCase() === name.toLowerCase());
+    if (!exists) { SUBCATS[cat.key].push(name); saveSubcats(); }
+    selectConcept(exists || name); // selecciona y cierra
+  }
+
+  function deleteSubcat(name) {
+    const cat = catByKey(state.category);
+    SUBCATS[cat.key] = subcatsFor(cat.key).filter((s) => s !== name);
+    saveSubcats();
+    if (state.concept === name) { state.concept = ''; renderConceptButton(); }
+    renderSubcatList();
   }
 
   /* -----------------------------------------------------------
@@ -737,12 +814,17 @@
         <div class="cal-detail-sums">${sums}</div>
       </div>
       ${list ? `<ul class="movements-list cal-mv-list">${list}</ul>` : ''}
-      <div class="cal-tip">
+      <div class="cal-tip" id="cal-tip">
         <span class="cal-tip-icon">💡</span>
         <div class="cal-tip-body">
           <p class="cal-tip-label">Consejo de Flux AI</p>
           <p class="cal-tip-text loading" id="cal-tip-text">Pensando un consejo…</p>
         </div>
+        <button class="cal-tip-close" id="cal-tip-close" aria-label="Cerrar consejo">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:13px;height:13px">
+            <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+          </svg>
+        </button>
       </div>`;
 
     // Consejo de IA para el día (con fallback local)
@@ -887,7 +969,9 @@
     listExpanded = false;
     $('input-concept').value = '';
     state.category = 'comida';
+    state.concept = '';
     renderCategoryButton();
+    renderConceptButton();
     setMode('expense');
     closeResetModal();
     renderAll();
@@ -913,8 +997,10 @@
     statsFilter  = 'all';
     state.category = 'comida';
     state.mode   = 'expense';
+    state.concept = '';
     $('input-concept').value = '';
     renderCategoryButton();
+    renderConceptButton();
     setMode('expense');
     updateDisplay();
   }
@@ -978,7 +1064,10 @@
      ----------------------------------------------------------- */
   function handleRegister() {
     const amount  = parseFloat(keypadInput);
-    const concept = $('input-concept').value.trim();
+    // Gasto → concepto/subcategoría elegido en el pill; Ingreso → texto libre
+    const concept = state.mode === 'income'
+      ? $('input-concept').value.trim()
+      : state.concept.trim();
     const prevBalance = state.balance;
 
     if (!keypadInput || isNaN(amount) || amount <= 0) {
@@ -1014,6 +1103,8 @@
     keypadInput = '';
     updateDisplay();
     $('input-concept').value = '';
+    state.concept = '';
+    renderConceptButton();
     renderMovements();
     renderCategoryStats();
     renderTip();
@@ -1648,6 +1739,7 @@
      ----------------------------------------------------------- */
   function init() {
     loadAccounts();
+    loadSubcats();
     loadState();
     renderAccountName();
     renderAll();
@@ -1695,6 +1787,12 @@
       const cell = e.target.closest('.cal-cell');
       if (cell && cell.dataset.day) selectCalDay(Number(cell.dataset.day));
     });
+    $('cal-day-detail').addEventListener('click', e => {
+      if (e.target.closest('#cal-tip-close')) {
+        const tip = $('cal-tip');
+        if (tip) tip.style.display = 'none';
+      }
+    });
 
     // Keypad
     document.querySelectorAll('.key').forEach(btn => {
@@ -1715,6 +1813,22 @@
       if (opt) selectCategory(opt.dataset.key);
     });
     renderCategoryButton();
+
+    // Concepto / subcategorías
+    $('btn-concept').addEventListener('click', openConceptSheet);
+    $('concept-sheet-backdrop').addEventListener('click', closeConceptSheet);
+    $('btn-subcat-add').addEventListener('click', () => addSubcat($('subcat-input').value));
+    $('subcat-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter') addSubcat($('subcat-input').value);
+    });
+    $('subcat-list').addEventListener('click', e => {
+      const del = e.target.closest('.subcat-chip-del');
+      if (del) { deleteSubcat(del.dataset.del); return; }
+      const pick = e.target.closest('.subcat-chip');
+      if (pick) selectConcept(pick.dataset.name);
+    });
+    $('btn-concept-none').addEventListener('click', () => selectConcept(''));
+    renderConceptButton();
 
     // Mode toggle
     $('btn-mode-expense').addEventListener('click', () => setMode('expense'));

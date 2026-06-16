@@ -130,14 +130,28 @@
           </svg>
         </button>
 
-        <!-- Concepto (texto libre) -->
-        <div class="concept-wrap">
+        <!-- Concepto / subcategoría (gasto): abre bottom sheet -->
+        <button id="btn-concept" class="category-select" type="button">
+          <span class="category-select-left">
+            <span class="category-select-emoji">🏷️</span>
+            <span class="category-select-text">
+              <span class="category-select-label">Concepto</span>
+              <span id="concept-value" class="category-select-value">Opcional</span>
+            </span>
+          </span>
+          <svg class="category-select-chevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+          </svg>
+        </button>
+
+        <!-- Concepto del ingreso (texto libre) -->
+        <div class="concept-wrap hidden" id="concept-input-wrap">
           <input
             id="input-concept"
             type="text"
             enterkeyhint="done"
             autocomplete="off"
-            placeholder="Concepto (ej. Burger King)"
+            placeholder="Concepto: Nómina, Bizum, Regalo…"
             class="concept-input"
           />
         </div>
@@ -633,6 +647,29 @@
         </svg>
         Añadir cuenta
       </button>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- BOTTOM SHEET — CONCEPTO / SUBCATEGORÍAS                      -->
+  <!-- ============================================================ -->
+  <div id="concept-sheet" class="cat-sheet hidden" role="dialog" aria-modal="true">
+    <div class="cat-sheet-backdrop" id="concept-sheet-backdrop"></div>
+    <div class="cat-sheet-panel">
+      <div class="cat-sheet-grabber"></div>
+      <p class="cat-sheet-title" id="concept-sheet-title">Concepto</p>
+      <div class="subcat-add">
+        <input id="subcat-input" type="text" maxlength="28" autocomplete="off" enterkeyhint="done" placeholder="Nueva subcategoría (ej. Burger King)" class="subcat-input" />
+        <button id="btn-subcat-add" class="subcat-add-btn" aria-label="Añadir subcategoría">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:20px;height:20px">
+            <path d="M10 5a.75.75 0 01.75.75v3.5h3.5a.75.75 0 010 1.5h-3.5v3.5a.75.75 0 01-1.5 0v-3.5h-3.5a.75.75 0 010-1.5h3.5v-3.5A.75.75 0 0110 5z" />
+          </svg>
+        </button>
+      </div>
+      <ul id="subcat-list" class="subcat-list">
+        <!-- subcategorías inyectadas desde JS -->
+      </ul>
+      <button id="btn-concept-none" class="subcat-none">Registrar sin concepto</button>
     </div>
   </div>
 
