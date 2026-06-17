@@ -2,8 +2,5 @@
   "name": "flux-finanzas",
   "version": "1.0.0",
   "private": true,
-  "type": "module",
-  "dependencies": {
-    "nodemailer": "^6.9.14"
-  }
+  "type": "module"
 }

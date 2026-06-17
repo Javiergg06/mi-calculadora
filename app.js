@@ -145,10 +145,13 @@
     return state.expenses.reduce((a, e) => a + e.amount, 0);
   }
 
+  // Escapa &, <, >, " y ' → seguro tanto en texto como en atributos HTML.
+  // (textContent+innerHTML NO escapa las comillas, lo que permitía XSS al
+  //  inyectar nombres de subcategoría dentro de atributos data-*).
   function escapeHtml(s) {
-    const d = document.createElement('div');
-    d.textContent = s;
-    return d.innerHTML;
+    return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => (
+      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+    ));
   }
 
   function formatDate(iso) {
@@ -1735,7 +1738,7 @@
   </div>
 
   <div class="foot">
-    <span>Flux · Generado localmente en tu dispositivo · ${genDate} ${genTime}</span>
+    <span>Flux · ${genDate} ${genTime} · Información con fines educativos, no asesoramiento financiero</span>
     <span>Confidencial</span>
   </div>
 </div>`;
