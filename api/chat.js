@@ -91,7 +91,9 @@ Responde siempre en español, de forma breve (máx 2-3 párrafos), cercana y mot
         'X-Title': 'Flux Finanzas',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.0-flash-001',
+        // Modelo GRATIS de OpenRouter (coste 0€). Si algún día se añade
+        // crédito, se puede cambiar a uno de pago mejor para usuarios premium.
+        model: 'meta-llama/llama-3.3-70b-instruct:free',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user',   content: message },

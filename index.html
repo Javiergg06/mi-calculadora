@@ -64,6 +64,13 @@
           </svg>
         </button>
         <div class="nav-actions">
+          <button id="btn-cloud" class="icon-circle-btn" aria-label="Cuenta y sincronización">
+            <svg id="cloud-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" style="width:18px;height:18px">
+              <path d="M4.5 9.5a4 4 0 014-4c.41 0 .81.06 1.18.18A5 5 0 0119 8.5a3.5 3.5 0 01-.5 6.96V15.5H7v-.02A4 4 0 014.5 9.5z" opacity=".0"/>
+              <path fill-rule="evenodd" d="M11.47 1.72a.75.75 0 011.06 0l3 3a.75.75 0 01-1.06 1.06l-1.72-1.72V12a.75.75 0 01-1.5 0V4.06L9.53 5.78a.75.75 0 01-1.06-1.06l3-3zM3 15.75a.75.75 0 01.75.75v2.25a1.5 1.5 0 001.5 1.5h13.5a1.5 1.5 0 001.5-1.5V16.5a.75.75 0 011.5 0v2.25a3 3 0 01-3 3H5.25a3 3 0 01-3-3V16.5a.75.75 0 01.75-.75z" clip-rule="evenodd"/>
+            </svg>
+            <span id="cloud-dot" class="cloud-dot hidden"></span>
+          </button>
           <button id="btn-add-account" class="icon-circle-btn" aria-label="Añadir cuenta">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:18px;height:18px">
               <path d="M10 5a.75.75 0 01.75.75v3.5h3.5a.75.75 0 010 1.5h-3.5v3.5a.75.75 0 01-1.5 0v-3.5h-3.5a.75.75 0 010-1.5h3.5v-3.5A.75.75 0 0110 5z" />
@@ -550,6 +557,37 @@
       </div>
     </div>
 
+    <!-- ============================================================ -->
+    <!-- MODAL — Cuenta en la nube (login / sincronización)           -->
+    <!-- ============================================================ -->
+    <div id="cloud-modal" class="reset-modal hidden">
+      <div class="reset-sheet">
+        <div class="reset-sheet-icon">☁️</div>
+
+        <!-- Vista: NO conectado -->
+        <div id="cloud-auth-view">
+          <h2 class="reset-sheet-title">Sincroniza tus datos</h2>
+          <p class="reset-sheet-sub">Crea una cuenta para guardar tus finanzas en la nube y usarlas en varios dispositivos. Tus datos siguen funcionando sin conexión.</p>
+          <input id="cloud-email" type="email" inputmode="email" autocomplete="email" placeholder="Tu correo" class="account-name-field" />
+          <input id="cloud-pass" type="password" autocomplete="current-password" placeholder="Contraseña (mín. 6)" class="account-name-field" />
+          <p id="cloud-msg" class="cloud-msg hidden"></p>
+          <button id="btn-cloud-primary" class="reset-sheet-confirm reset-sheet-create">Crear cuenta</button>
+          <button id="btn-cloud-toggle" class="cloud-link">¿Ya tienes cuenta? Inicia sesión</button>
+          <button id="btn-cloud-cancel" class="reset-sheet-cancel">Más tarde</button>
+        </div>
+
+        <!-- Vista: conectado -->
+        <div id="cloud-account-view" class="hidden">
+          <h2 class="reset-sheet-title">Tu cuenta</h2>
+          <p class="reset-sheet-sub">Conectado como <strong id="cloud-user-email">—</strong>. Tus cambios se guardan en la nube automáticamente.</p>
+          <p id="cloud-sync-status" class="cloud-sync-status">Sincronizado ✓</p>
+          <button id="btn-cloud-sync" class="reset-sheet-confirm reset-sheet-create">Sincronizar ahora</button>
+          <button id="btn-cloud-signout" class="reset-sheet-cancel">Cerrar sesión</button>
+          <button id="btn-cloud-close" class="cloud-link">Cerrar</button>
+        </div>
+      </div>
+    </div>
+
   </div><!-- /app-shell -->
 
 
@@ -678,6 +716,7 @@
   <div id="pdf-stage" aria-hidden="true"></div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
-  <script src="app.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
+  <script src="app.js" defer></script>
 </body>
 </html>

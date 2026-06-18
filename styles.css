@@ -1303,6 +1303,46 @@ input { user-select: text; }
 .reset-sheet-cancel:active { transform: scale(0.98); }
 .reset-sheet-create { background: var(--c-blue); }
 
+/* ── Nube / cuenta ────────────────────────────────────────────── */
+.cloud-dot {
+  position: absolute;
+  top: 3px; right: 3px;
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  background: var(--c-green);
+  border: 1.5px solid var(--bg);
+}
+.cloud-dot.syncing { background: var(--c-orange); }
+.cloud-msg {
+  font-size: 13px;
+  line-height: 1.4;
+  margin-bottom: 12px;
+  padding: 9px 12px;
+  border-radius: 10px;
+}
+.cloud-msg.err { background: rgba(255,59,48,0.10); color: var(--c-red); }
+.cloud-msg.ok  { background: rgba(48,209,88,0.12); color: #1E874B; }
+.cloud-link {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--c-blue);
+  background: none;
+  text-align: center;
+}
+.cloud-link:active { opacity: 0.6; }
+.cloud-sync-status {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1E874B;
+  margin-bottom: 18px;
+}
+.cloud-sync-status.syncing { color: var(--c-orange); }
+.cloud-sync-status.err { color: var(--c-red); }
+
 /* Campo de nombre de cuenta */
 .account-name-field {
   width: 100%;

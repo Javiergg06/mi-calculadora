@@ -25,6 +25,16 @@
   // Clave de almacenamiento por cuenta: fx_<base>_<id>
   function accKey(base) { return 'fx_' + base + '_' + activeAccountId; }
 
+  /* ── Nube (Supabase) — sincronización opcional ──
+     La clave "publishable" es segura en el cliente; la protección real es
+     RLS en Supabase (cada usuario solo ve sus filas). */
+  const SUPABASE_URL  = 'https://ixzhiqasqlghxutqnkkh.supabase.co';
+  const SUPABASE_ANON = 'sb_publishable_YvrNRqH-bQJzwhvfA037wQ_SPn3pzbp';
+  let sb        = null;       // cliente Supabase (null si no carga)
+  let cloudUser = null;       // usuario conectado (null si no)
+  let pushTimer = null;       // debounce de subida
+  let authMode  = 'signup';   // 'signup' | 'login'
+
   /* Consejos financieros que rotan en la pantalla de inicio */
   const TIPS = [
     'Apunta cada gasto el mismo día. Lo que no se mide, no se controla.',
@@ -82,7 +92,7 @@
     try { SUBCATS = JSON.parse(localStorage.getItem(accKey('subcats')) || '{}') || {}; }
     catch { SUBCATS = {}; }
   }
-  function saveSubcats() { localStorage.setItem(accKey('subcats'), JSON.stringify(SUBCATS)); }
+  function saveSubcats() { localStorage.setItem(accKey('subcats'), JSON.stringify(SUBCATS)); scheduleCloudPush(); }
   function subcatsFor(key) { return Array.isArray(SUBCATS[key]) ? SUBCATS[key] : []; }
 
   /* Carga la lista de cuentas; migra datos antiguos la primera vez */
@@ -117,8 +127,8 @@
     }
   }
 
-  function saveAccounts()        { localStorage.setItem(KEYS.accounts, JSON.stringify(accounts)); }
-  function setActiveAccount(id)  { activeAccountId = id; localStorage.setItem(KEYS.active, id); }
+  function saveAccounts()        { localStorage.setItem(KEYS.accounts, JSON.stringify(accounts)); scheduleCloudPush(); }
+  function setActiveAccount(id)  { activeAccountId = id; localStorage.setItem(KEYS.active, id); scheduleCloudPush(); }
   function activeAccount()       { return accounts.find(a => a.id === activeAccountId) || null; }
 
   function loadState() {
@@ -128,9 +138,9 @@
     try { state.incomes  = JSON.parse(localStorage.getItem(accKey('incomes'))  || '[]'); } catch { state.incomes  = []; }
   }
 
-  function saveBalance()  { localStorage.setItem(accKey('balance'),  String(state.balance)); }
-  function saveExpenses() { localStorage.setItem(accKey('expenses'), JSON.stringify(state.expenses)); }
-  function saveIncomes()  { localStorage.setItem(accKey('incomes'),  JSON.stringify(state.incomes)); }
+  function saveBalance()  { localStorage.setItem(accKey('balance'),  String(state.balance)); scheduleCloudPush(); }
+  function saveExpenses() { localStorage.setItem(accKey('expenses'), JSON.stringify(state.expenses)); scheduleCloudPush(); }
+  function saveIncomes()  { localStorage.setItem(accKey('incomes'),  JSON.stringify(state.incomes)); scheduleCloudPush(); }
 
   /* -----------------------------------------------------------
      2. UTILIDADES
@@ -985,6 +995,7 @@
     closeResetModal();
     renderAll();
     renderTip();
+    scheduleCloudPush(); // refleja el reinicio en la nube
     showPage('page-home');
     // Vuelve a pedir el saldo inicial
     maybeShowOnboarding();
@@ -1068,6 +1079,171 @@
     renderTip();
     showPage('page-home');
     maybeShowOnboarding(); // pedirá el saldo inicial de la nueva cuenta
+  }
+
+  /* -----------------------------------------------------------
+     5f. NUBE (Supabase): login + sincronización (local-first)
+     ----------------------------------------------------------- */
+  // Toma una "foto" de todos los datos locales (claves fx_*)
+  function snapshotLocal() {
+    const o = {};
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.indexOf('fx_') === 0) o[k] = localStorage.getItem(k);
+    }
+    return o;
+  }
+  // Restaura una foto en localStorage (reemplaza las claves fx_*)
+  function restoreLocal(obj) {
+    Object.keys(localStorage).filter((k) => k.indexOf('fx_') === 0).forEach((k) => localStorage.removeItem(k));
+    Object.entries(obj || {}).forEach(([k, v]) => localStorage.setItem(k, v));
+  }
+  // Re-carga el estado en memoria desde localStorage y repinta
+  function reloadFromStorage() {
+    loadAccounts(); loadSubcats(); loadState();
+    keypadInput = ''; listExpanded = false; statsFilter = 'all';
+    state.category = 'comida'; state.concept = '';
+    $('onboarding').classList.add('hidden'); // hay datos en la nube ⇒ ya configurado
+    renderAccountName(); renderCategoryButton(); renderConceptButton();
+    setMode('expense'); renderAll(); renderTip(); updateDisplay();
+    showPage('page-home');
+  }
+
+  function setCloudSync(stateName) {
+    const dot = $('cloud-dot');
+    if (dot) {
+      dot.classList.remove('hidden', 'syncing');
+      if (stateName === 'syncing') dot.classList.add('syncing');
+    }
+    const st = $('cloud-sync-status');
+    if (st) {
+      st.classList.remove('syncing', 'err');
+      if (stateName === 'syncing') { st.textContent = 'Sincronizando…'; st.classList.add('syncing'); }
+      else if (stateName === 'err') { st.textContent = 'Error de sincronización'; st.classList.add('err'); }
+      else st.textContent = 'Sincronizado ✓';
+    }
+  }
+
+  function scheduleCloudPush() {
+    if (!sb || !cloudUser) return;
+    setCloudSync('syncing');
+    clearTimeout(pushTimer);
+    pushTimer = setTimeout(() => { cloudPush().catch(() => setCloudSync('err')); }, 1500);
+  }
+
+  async function cloudPush() {
+    if (!sb || !cloudUser) return;
+    const { error } = await sb.from('user_data').upsert({
+      user_id: cloudUser.id,
+      data: snapshotLocal(),
+      updated_at: new Date().toISOString(),
+    });
+    if (error) { console.warn('cloudPush:', error.message); setCloudSync('err'); return; }
+    setCloudSync('synced');
+  }
+
+  async function cloudPull() {
+    if (!sb || !cloudUser) return;
+    setCloudSync('syncing');
+    const { data, error } = await sb.from('user_data').select('data').eq('user_id', cloudUser.id).maybeSingle();
+    if (error) { console.warn('cloudPull:', error.message); setCloudSync('err'); return; }
+    if (data && data.data && Object.keys(data.data).length > 0) {
+      restoreLocal(data.data);
+      reloadFromStorage();
+      setCloudSync('synced');
+    } else {
+      await cloudPush(); // primera vez: sube los datos locales como base
+    }
+  }
+
+  function openCloudModal()  { renderCloudUI(); $('cloud-modal').classList.remove('hidden'); }
+  function closeCloudModal() { $('cloud-modal').classList.add('hidden'); }
+  function setCloudMsg(text, kind) {
+    const el = $('cloud-msg');
+    if (!el) return;
+    if (!text) { el.classList.add('hidden'); el.textContent = ''; return; }
+    el.textContent = text;
+    el.className = 'cloud-msg ' + (kind || '');
+  }
+
+  function renderCloudUI() {
+    const authView = $('cloud-auth-view');
+    const accView  = $('cloud-account-view');
+    const dot      = $('cloud-dot');
+    if (cloudUser) {
+      authView.classList.add('hidden');
+      accView.classList.remove('hidden');
+      $('cloud-user-email').textContent = cloudUser.email || 'tu cuenta';
+      if (dot) dot.classList.remove('hidden');
+    } else {
+      authView.classList.remove('hidden');
+      accView.classList.add('hidden');
+      if (dot) dot.classList.add('hidden');
+      setCloudMsg('');
+      $('btn-cloud-primary').textContent = authMode === 'signup' ? 'Crear cuenta' : 'Iniciar sesión';
+      $('btn-cloud-toggle').textContent  = authMode === 'signup' ? '¿Ya tienes cuenta? Inicia sesión' : 'Crear una cuenta nueva';
+    }
+  }
+
+  function toggleAuthMode() { authMode = authMode === 'signup' ? 'login' : 'signup'; renderCloudUI(); }
+
+  function translateAuthError(m) {
+    m = (m || '').toLowerCase();
+    if (m.includes('already registered') || m.includes('already been registered')) return 'Ese correo ya tiene cuenta. Inicia sesión.';
+    if (m.includes('invalid login') || m.includes('credentials')) return 'Correo o contraseña incorrectos.';
+    if (m.includes('email not confirmed')) return 'Confirma tu correo (revisa tu email) antes de iniciar sesión.';
+    if (m.includes('password')) return 'Contraseña no válida (mínimo 6 caracteres).';
+    if (m.includes('rate')) return 'Demasiados intentos. Espera un momento.';
+    return 'No se pudo completar. Inténtalo de nuevo.';
+  }
+
+  async function handleCloudPrimary() {
+    if (!sb) { setCloudMsg('El servicio de nube no se cargó. Revisa tu conexión.', 'err'); return; }
+    const email = $('cloud-email').value.trim();
+    const pass  = $('cloud-pass').value;
+    if (!email || !pass) { setCloudMsg('Escribe tu correo y tu contraseña.', 'err'); return; }
+    if (pass.length < 6) { setCloudMsg('La contraseña debe tener al menos 6 caracteres.', 'err'); return; }
+
+    setCloudMsg('Procesando…', '');
+    $('btn-cloud-primary').disabled = true;
+    try {
+      if (authMode === 'signup') {
+        const { data, error } = await sb.auth.signUp({ email, password: pass });
+        if (error) setCloudMsg(translateAuthError(error.message), 'err');
+        else if (data.session) setCloudMsg('¡Cuenta creada! 🎉', 'ok'); // onAuthStateChange hará el resto
+        else { setCloudMsg('Cuenta creada. Revisa tu correo para confirmarla y luego inicia sesión.', 'ok'); authMode = 'login'; renderCloudUI(); }
+      } else {
+        const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+        if (error) setCloudMsg(translateAuthError(error.message), 'err');
+      }
+    } catch (_) {
+      setCloudMsg('Error de conexión. Inténtalo de nuevo.', 'err');
+    }
+    $('btn-cloud-primary').disabled = false;
+  }
+
+  async function handleCloudSignOut() {
+    if (sb) { try { await sb.auth.signOut(); } catch (_) {} }
+    closeCloudModal();
+  }
+
+  function initCloud() {
+    try { if (window.supabase && window.supabase.createClient) sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON); }
+    catch (_) { sb = null; }
+    if (!sb) return;
+
+    sb.auth.getSession().then(({ data }) => {
+      cloudUser = data && data.session ? data.session.user : null;
+      renderCloudUI();
+      if (cloudUser) cloudPull();
+    }).catch(() => {});
+
+    sb.auth.onAuthStateChange((event, session) => {
+      cloudUser = session ? session.user : null;
+      renderCloudUI();
+      if (event === 'SIGNED_IN')  { closeCloudModal(); cloudPull(); }
+      if (event === 'SIGNED_OUT') { setCloudSync('synced'); }
+    });
   }
 
   /* -----------------------------------------------------------
@@ -1777,6 +1953,22 @@
     });
     $('account-name-input').addEventListener('keydown', e => {
       if (e.key === 'Enter') confirmCreateAccount();
+    });
+
+    // Nube (Supabase)
+    initCloud();
+    $('btn-cloud').addEventListener('click', openCloudModal);
+    $('btn-cloud-cancel').addEventListener('click', closeCloudModal);
+    $('btn-cloud-close').addEventListener('click', closeCloudModal);
+    $('cloud-modal').addEventListener('click', e => {
+      if (e.target === $('cloud-modal')) closeCloudModal();
+    });
+    $('btn-cloud-primary').addEventListener('click', handleCloudPrimary);
+    $('btn-cloud-toggle').addEventListener('click', toggleAuthMode);
+    $('btn-cloud-sync').addEventListener('click', () => cloudPush());
+    $('btn-cloud-signout').addEventListener('click', handleCloudSignOut);
+    $('cloud-pass').addEventListener('keydown', e => {
+      if (e.key === 'Enter') handleCloudPrimary();
     });
 
     // Estadísticas — gráfico y chips
