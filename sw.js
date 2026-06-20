@@ -4,7 +4,7 @@
    Los datos (gastos, saldo) viven en localStorage
    =========================================================== */
 
-const CACHE_NAME = 'flux-v2';
+const CACHE_NAME = 'flux-v3';
 
 const urlsToCache = [
   '/',
@@ -12,6 +12,10 @@ const urlsToCache = [
   '/app.js',
   '/styles.css',
   '/manifest.json',
+  '/icon-192.png',
+  '/icon-512.png',
+  '/icon-maskable-512.png',
+  '/apple-touch-icon.png',
   'https://cdn.tailwindcss.com',
   'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap',
 ];
