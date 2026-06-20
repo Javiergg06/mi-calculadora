@@ -1281,7 +1281,7 @@
         const { data, error } = await sb.auth.signUp({ email, password: pass });
         if (error) setCloudMsg(translateAuthError(error.message), 'err');
         else if (data.session) setCloudMsg('¡Cuenta creada! 🎉', 'ok'); // onAuthStateChange hará el resto
-        else { setCloudMsg('Cuenta creada. Revisa tu correo para confirmarla y luego inicia sesión.', 'ok'); authMode = 'login'; renderCloudUI(); }
+        else { authMode = 'login'; renderCloudUI(); setCloudMsg('Cuenta creada. Revisa tu correo para confirmarla y luego inicia sesión.', 'ok'); }
       } else {
         const { error } = await sb.auth.signInWithPassword({ email, password: pass });
         if (error) setCloudMsg(translateAuthError(error.message), 'err');
