@@ -608,7 +608,22 @@
     emptyEl.classList.add('hidden');
     bodyEl.classList.remove('hidden');
 
-    // Gráfico de barras (todas las categorías)
+    // Gráfico de barras VERTICAL (columnas por categoría)
+    const maxTotal = groups.reduce((m, g) => Math.max(m, g.total), 0);
+    $('stats-columns').classList.toggle('has-active', statsFilter !== 'all');
+    $('stats-columns').innerHTML = groups.map(g => {
+      const h      = maxTotal > 0 ? Math.max(8, (g.total / maxTotal) * 100) : 8;
+      const color  = barColorFor(g.cat.key);
+      const active = statsFilter === g.cat.key ? ' is-active' : '';
+      return `
+        <button class="stat-col${active}" data-key="${g.cat.key}">
+          <span class="stat-col-amt">€${g.total.toFixed(0)}</span>
+          <span class="stat-col-track"><span class="stat-col-fill" style="height:${h.toFixed(1)}%;background:${color}"></span></span>
+          <span class="stat-col-emoji">${g.cat.emoji}</span>
+        </button>`;
+    }).join('');
+
+    // Gráfico de barras horizontal (desglose detallado)
     $('stats-chart').innerHTML = groups.map(g => {
       const pct    = total > 0 ? (g.total / total) * 100 : 0;
       const color  = barColorFor(g.cat.key);
@@ -701,6 +716,44 @@
     if (m < 0)  { m = 11; y--; }
     if (m > 11) { m = 0;  y++; }
     calState.month = m; calState.year = y; calState.selectedDay = null;
+    const p = $('cal-picker'); if (p) p.classList.add('hidden');
+    renderCalendar();
+  }
+
+  // ── Selector de mes/año ──
+  const PICKER_MONTHS = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  function renderMonthPicker() {
+    const p = $('cal-picker');
+    if (!p) return;
+    const grid = PICKER_MONTHS.map((m, i) =>
+      `<button class="cal-pick-m${i === calState.month ? ' is-active' : ''}" data-m="${i}">${m}</button>`
+    ).join('');
+    p.innerHTML = `
+      <div class="cal-pick-year">
+        <button class="cal-pick-year-btn" data-y="-1" aria-label="Año anterior">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:16px;height:16px"><path fill-rule="evenodd" d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z" clip-rule="evenodd" /></svg>
+        </button>
+        <span class="cal-pick-year-label">${calState.year}</span>
+        <button class="cal-pick-year-btn" data-y="1" aria-label="Año siguiente">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:16px;height:16px"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd" /></svg>
+        </button>
+      </div>
+      <div class="cal-pick-grid">${grid}</div>`;
+  }
+  function toggleMonthPicker() {
+    const p = $('cal-picker');
+    if (!p) return;
+    if (p.classList.contains('hidden')) { renderMonthPicker(); p.classList.remove('hidden'); }
+    else p.classList.add('hidden');
+  }
+  function pickMonth(m) {
+    calState.month = m; calState.selectedDay = null;
+    const p = $('cal-picker'); if (p) p.classList.add('hidden');
+    renderCalendar();
+  }
+  function pickYear(delta) {
+    calState.year += delta; calState.selectedDay = null;
+    renderMonthPicker();
     renderCalendar();
   }
 
@@ -744,7 +797,7 @@
     // ── Etiqueta del mes ──
     const monthName = new Date(calState.year, calState.month, 1)
       .toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
-    $('cal-month-label').textContent = monthName.charAt(0).toUpperCase() + monthName.slice(1);
+    $('cal-month-text').textContent = monthName.charAt(0).toUpperCase() + monthName.slice(1);
 
     // ── Sumas por día del mes ──
     const movs = calMovements().filter(m => {
@@ -797,6 +850,7 @@
 
     const dayInc = movs.filter(m => m._t === 'income').reduce((s, m) => s + m.amount, 0);
     const dayExp = movs.filter(m => m._t === 'expense').reduce((s, m) => s + m.amount, 0);
+    const dayNet = dayInc - dayExp;
 
     const list = movs.map(m => {
       const isInc = m._t === 'income';
@@ -821,17 +875,33 @@
         </li>`;
     }).join('');
 
-    let sums = '';
-    if (dayInc > 0) sums += `<span class="cal-sum-inc">+€${dayInc.toFixed(2)}</span>`;
-    if (dayExp > 0) sums += `<span class="cal-sum-exp">−€${dayExp.toFixed(2)}</span>`;
-    if (!sums)      sums  = `<span class="cal-sum-none">Sin movimientos</span>`;
+    let summary;
+    if (movs.length === 0) {
+      summary = `<div class="cal-day-summary"><span class="cal-sum-none">Sin movimientos este día</span></div>`;
+    } else {
+      summary = `
+        <div class="cal-day-summary">
+          <div class="cal-sum-box">
+            <span class="cal-sum-k">Ingresado</span>
+            <span class="cal-sum-inc">+€${dayInc.toFixed(2)}</span>
+          </div>
+          <div class="cal-sum-box">
+            <span class="cal-sum-k">Gastado</span>
+            <span class="cal-sum-exp">−€${dayExp.toFixed(2)}</span>
+          </div>
+          <div class="cal-sum-box cal-sum-box-net">
+            <span class="cal-sum-k">Total</span>
+            <span class="cal-sum-net ${dayNet >= 0 ? 'pos' : 'neg'}">${dayNet >= 0 ? '+' : '−'}€${Math.abs(dayNet).toFixed(2)}</span>
+          </div>
+        </div>`;
+    }
 
     wrap.classList.remove('hidden');
     wrap.innerHTML = `
       <div class="cal-detail-head">
         <p class="cal-detail-date">${escapeHtml(labelCap)}</p>
-        <div class="cal-detail-sums">${sums}</div>
       </div>
+      ${summary}
       ${list ? `<ul class="movements-list cal-mv-list">${list}</ul>` : ''}
       <div class="cal-tip" id="cal-tip">
         <span class="cal-tip-icon">💡</span>
@@ -1368,6 +1438,10 @@
 
     const btn = document.querySelector(`.tab-item[data-page="${pageId}"]`);
     if (btn) btn.classList.add('tab-active');
+
+    // El botón flotante de IA se oculta dentro del propio chat
+    const fab = $('fab-ai');
+    if (fab) fab.classList.toggle('hidden', pageId === 'page-chat');
 
     // Al abrir el calendario: si es el mes actual, selecciona hoy por defecto
     if (pageId === 'page-calendar') {
@@ -1976,6 +2050,10 @@
       const row = e.target.closest('.stat-bar-row');
       if (row) setStatsFilter(row.dataset.key);
     });
+    $('stats-columns').addEventListener('click', e => {
+      const col = e.target.closest('.stat-col');
+      if (col) setStatsFilter(col.dataset.key);
+    });
     $('stats-chips').addEventListener('click', e => {
       const chip = e.target.closest('.stat-chip');
       if (chip) setStatsFilter(chip.dataset.key);
@@ -1984,6 +2062,13 @@
     // Calendario
     $('cal-prev').addEventListener('click', () => changeMonth(-1));
     $('cal-next').addEventListener('click', () => changeMonth(1));
+    $('cal-month-label').addEventListener('click', toggleMonthPicker);
+    $('cal-picker').addEventListener('click', e => {
+      const mb = e.target.closest('[data-m]');
+      if (mb) { pickMonth(Number(mb.dataset.m)); return; }
+      const yb = e.target.closest('[data-y]');
+      if (yb) { pickYear(Number(yb.dataset.y)); return; }
+    });
     $('cal-mode-active').addEventListener('click', () => setCalMode('active'));
     $('cal-mode-all').addEventListener('click', () => setCalMode('all'));
     $('cal-grid').addEventListener('click', e => {
@@ -2058,6 +2143,10 @@
 
     // AI card → chat tab
     $('btn-go-chat').addEventListener('click', () => showPage('page-chat'));
+
+    // Asistente IA: botón flotante + volver
+    $('fab-ai').addEventListener('click', () => showPage('page-chat'));
+    $('chat-back').addEventListener('click', () => showPage('page-home'));
 
     // Chat
     $('btn-send-message').addEventListener('click', handleSendMessage);

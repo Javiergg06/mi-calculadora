@@ -319,6 +319,7 @@
           <div class="list-section-header">
             <span class="list-section-title">Gasto por categoría</span>
           </div>
+          <div id="stats-columns" class="stats-columns"></div>
           <div id="stats-chart" class="stats-chart"></div>
 
           <div class="list-section-header">
@@ -370,11 +371,17 @@
           <button id="cal-prev" class="cal-nav-btn" aria-label="Mes anterior">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:18px;height:18px"><path fill-rule="evenodd" d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z" clip-rule="evenodd" /></svg>
           </button>
-          <span id="cal-month-label" class="cal-month-label">—</span>
+          <button id="cal-month-label" class="cal-month-label" aria-label="Elegir mes">
+            <span id="cal-month-text">—</span>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:14px;height:14px"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" /></svg>
+          </button>
           <button id="cal-next" class="cal-nav-btn" aria-label="Mes siguiente">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:18px;height:18px"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd" /></svg>
           </button>
         </div>
+
+        <!-- Selector de mes/año -->
+        <div id="cal-picker" class="cal-picker hidden"></div>
 
         <!-- Cabeceras de día -->
         <div class="cal-weekdays">
@@ -413,6 +420,11 @@
             </div>
           </div>
         </div>
+        <button id="chat-back" class="chat-back" aria-label="Volver">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:16px;height:16px">
+            <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+          </svg>
+        </button>
       </header>
 
       <div id="chat-scroll" class="chat-scroll">
@@ -480,14 +492,15 @@
         <span class="tab-label">Calendario</span>
       </button>
 
-      <button class="tab-item" data-page="page-chat">
-        <svg class="tab-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-          <path fill-rule="evenodd" d="M4.848 2.771A49.144 49.144 0 0112 2.25c2.43 0 4.817.178 7.152.52 1.978.292 3.348 2.024 3.348 3.97v6.02c0 1.946-1.37 3.678-3.348 3.97a48.901 48.901 0 01-3.476.383.39.39 0 00-.297.17l-2.755 4.133a.75.75 0 01-1.248 0l-2.755-4.133a.39.39 0 00-.297-.17 48.9 48.9 0 01-3.476-.384c-1.978-.29-3.348-2.024-3.348-3.97V6.741c0-1.946 1.37-3.68 3.348-3.97z" clip-rule="evenodd" />
-        </svg>
-        <span class="tab-label">Asistente</span>
-      </button>
-
     </nav>
+
+    <!-- Botón flotante: Asistente IA -->
+    <button id="fab-ai" class="fab-ai" aria-label="Abrir Asistente Flux AI">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M9.315 7.584C12.195 3.883 16.695 1.5 21.75 1.5a.75.75 0 01.75.75c0 5.056-2.383 9.555-6.084 12.436A6.75 6.75 0 019.75 22.5a.75.75 0 01-.75-.75v-4.131A15.838 15.838 0 016.382 15H2.25a.75.75 0 01-.75-.75 6.75 6.75 0 017.815-6.666zM15 6.75a2.25 2.25 0 100 4.5 2.25 2.25 0 000-4.5z" />
+        <path d="M5.26 17.242a.75.75 0 10-.897-1.203 5.243 5.243 0 00-2.05 5.022.75.75 0 00.625.627 5.243 5.243 0 005.022-2.051.75.75 0 10-1.202-.897 3.744 3.744 0 01-3.008 1.51c0-1.23.592-2.323 1.51-3.008z" />
+      </svg>
+    </button>
 
     <!-- ============================================================ -->
     <!-- ONBOARDING — Pantalla de bienvenida                          -->
