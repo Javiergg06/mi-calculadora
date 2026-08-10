@@ -55,6 +55,12 @@ export async function ebFetch(path, { method = 'GET', body } = {}) {
   return { ok: r.ok, status: r.status, data };
 }
 
-// URL de retorno registrada en la aplicación de Enable Banking.
-export const REDIRECT_URL = 'https://mi-calculadora-bq83.vercel.app/api/bank/callback';
-export const APP_BASE     = 'https://mi-calculadora-bq83.vercel.app/';
+// Deriva las URLs del propio dominio de la petición, así funciona en
+// cualquier dominio de Vercel (chi, bq83, futuros) sin tocar el código.
+// Requisito: la URL de callback debe estar registrada en Enable Banking.
+export function hostUrls(req) {
+  const host  = String(req.headers['x-forwarded-host'] || req.headers.host || 'mi-calculadora-chi.vercel.app').split(',')[0].trim();
+  const proto = String(req.headers['x-forwarded-proto'] || 'https').split(',')[0].trim();
+  const base  = `${proto}://${host}`;
+  return { appBase: base + '/', redirect: base + '/api/bank/callback' };
+}

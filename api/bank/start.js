@@ -2,7 +2,7 @@
    Inicia la autorización: devuelve { url, state }.
    El cliente guarda `state`, redirige a `url` (login del banco). */
 import crypto from 'node:crypto';
-import { applyCors, ebFetch, REDIRECT_URL } from './_lib.js';
+import { applyCors, ebFetch, hostUrls } from './_lib.js';
 
 export default async function handler(req, res) {
   const { origin, allow } = applyCors(req, res);
@@ -17,6 +17,7 @@ export default async function handler(req, res) {
 
   const state       = crypto.randomUUID();
   const validUntil  = new Date(Date.now() + 10 * 24 * 3600 * 1000).toISOString(); // 10 días
+  const { redirect } = hostUrls(req);
   try {
     const { ok, status, data } = await ebFetch('/auth', {
       method: 'POST',
@@ -24,7 +25,7 @@ export default async function handler(req, res) {
         access: { valid_until: validUntil },
         aspsp: { name, country },
         state,
-        redirect_url: REDIRECT_URL,
+        redirect_url: redirect,
         psu_type: 'personal',
       },
     });
