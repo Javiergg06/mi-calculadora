@@ -1317,8 +1317,284 @@
   }
 
   /* -----------------------------------------------------------
+     5g. BANCO — importa tus compras con tarjeta automáticamente
+     (Open Banking / PSD2 vía Enable Banking). Solo LECTURA: la app
+     nunca puede mover dinero. La clave vive en el servidor.
+     ----------------------------------------------------------- */
+  const BANK_KEY  = 'fx_bank';       // { aspsp, country, accounts[], linkedAt }
+  const BANK_SEEN = 'fx_bank_seen';  // ids de movimientos ya importados
+  let bankLink = null;
+
+  function loadBank() {
+    try { bankLink = JSON.parse(localStorage.getItem(BANK_KEY) || 'null'); }
+    catch (_) { bankLink = null; }
+  }
+  function saveBank() {
+    if (bankLink) localStorage.setItem(BANK_KEY, JSON.stringify(bankLink));
+    else localStorage.removeItem(BANK_KEY);
+    scheduleCloudPush();
+  }
+  function seenIds() {
+    try { return new Set(JSON.parse(localStorage.getItem(BANK_SEEN) || '[]')); }
+    catch (_) { return new Set(); }
+  }
+  function saveSeen(set) {
+    // Guarda solo los últimos 800 para no llenar el almacenamiento
+    localStorage.setItem(BANK_SEEN, JSON.stringify([...set].slice(-800)));
+    scheduleCloudPush();
+  }
+
+  // Adivina la categoría por el nombre del comercio
+  const BANK_RULES = [
+    { cat: 'supermercado', re: /mercadona|carrefour|lidl|aldi|dia\b|alcampo|eroski|consum|super|hipercor|ahorramas/i },
+    { cat: 'comida',       re: /burger|mcdonald|kfc|telepizza|domino|glovo|just ?eat|uber ?eats|restaurante|bar\b|cafe|cafeter|tacos|sushi|kebab|starbucks/i },
+    { cat: 'transporte',   re: /repsol|cepsa|galp|shell|bp\b|gasolin|renfe|metro|emt|uber|cabify|bolt|taxi|parking|autopista|blablacar|iberia|vueling|ryanair/i },
+    { cat: 'ocio',         re: /netflix|spotify|hbo|disney|prime video|cine|yelmo|cinesa|steam|playstation|xbox|nintendo|gimnasio|padel|discoteca|teatro/i },
+  ];
+  function guessCategory(text) {
+    const t = String(text || '');
+    for (const r of BANK_RULES) if (r.re.test(t)) return r.cat;
+    return 'otros';
+  }
+
+  // Normaliza un movimiento de la API a algo que la app entienda
+  function parseTx(tx) {
+    const amtRaw = (tx.transaction_amount && tx.transaction_amount.amount) != null
+      ? tx.transaction_amount.amount : tx.amount;
+    const amount = Math.abs(parseFloat(amtRaw));
+    if (!Number.isFinite(amount) || amount <= 0) return null;
+
+    const ind = String(tx.credit_debit_indicator || '').toUpperCase();
+    const isExpense = ind ? ind === 'DBIT' : parseFloat(amtRaw) < 0;
+
+    const name =
+      (tx.creditor && tx.creditor.name) ||
+      (tx.debtor && tx.debtor.name) ||
+      (Array.isArray(tx.remittance_information) ? tx.remittance_information.join(' ') : tx.remittance_information) ||
+      (isExpense ? 'Compra' : 'Ingreso');
+
+    const dateStr = tx.booking_date || tx.value_date || tx.transaction_date;
+    const date = dateStr ? new Date(dateStr) : new Date();
+
+    const id = tx.entry_reference || tx.transaction_id ||
+      `${dateStr || ''}|${amtRaw}|${String(name).slice(0, 30)}`;
+
+    return {
+      id: String(id),
+      amount,
+      isExpense,
+      concept: String(name).trim().slice(0, 60),
+      date: isNaN(date) ? new Date().toISOString() : date.toISOString(),
+    };
+  }
+
+  function bankMsg(text, kind, which) {
+    const el = $(which || 'bank-msg');
+    if (!el) return;
+    if (!text) { el.classList.add('hidden'); el.textContent = ''; return; }
+    el.textContent = text;
+    el.className = 'cloud-msg ' + (kind || '');
+  }
+
+  function openBankModal()  { renderBankUI(); $('bank-modal').classList.remove('hidden'); if (!bankLink) loadBankList(); }
+  function closeBankModal() { $('bank-modal').classList.add('hidden'); }
+
+  function renderBankUI() {
+    const connectView = $('bank-connect-view');
+    const linkedView  = $('bank-linked-view');
+    const dot = $('bank-dot');
+    if (bankLink) {
+      connectView.classList.add('hidden');
+      linkedView.classList.remove('hidden');
+      $('bank-name-label').textContent = bankLink.aspsp || 'Tu banco';
+      $('bank-acc-count').textContent  = (bankLink.accounts || []).length;
+      const when = bankLink.lastSync ? new Date(bankLink.lastSync) : null;
+      $('bank-sync-status').textContent = when
+        ? `Última importación: ${when.toLocaleDateString('es-ES')} ${when.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`
+        : 'Aún no has importado movimientos.';
+      if (dot) dot.classList.remove('hidden');
+    } else {
+      connectView.classList.remove('hidden');
+      linkedView.classList.add('hidden');
+      if (dot) dot.classList.add('hidden');
+    }
+  }
+
+  async function loadBankList() {
+    const sel = $('bank-select');
+    try {
+      const r = await fetch('/api/bank/aspsps?country=ES');
+      const d = await r.json();
+      const banks = d.banks || [];
+      if (!banks.length) { sel.innerHTML = '<option value="">No hay bancos disponibles</option>'; return; }
+      sel.innerHTML = banks
+        .map(b => `<option value="${escapeHtml(b.name)}">${escapeHtml(b.name)}</option>`)
+        .join('');
+      const bbva = banks.find(b => /bbva/i.test(b.name));
+      if (bbva) sel.value = bbva.name;
+    } catch (_) {
+      sel.innerHTML = '<option value="">Error al cargar</option>';
+    }
+  }
+
+  async function handleBankConnect() {
+    const name = $('bank-select').value;
+    if (!name) { bankMsg('Elige tu banco.', 'err'); return; }
+    bankMsg('Conectando…', '');
+    $('btn-bank-connect').disabled = true;
+    try {
+      const r = await fetch('/api/bank/start', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ aspsp_name: name, aspsp_country: 'ES' }),
+      });
+      const d = await r.json();
+      if (!r.ok || !d.url) { bankMsg('No se pudo conectar con el banco.', 'err'); $('btn-bank-connect').disabled = false; return; }
+      sessionStorage.setItem('fx_bank_pending', JSON.stringify({ aspsp: name, state: d.state }));
+      window.location.href = d.url;           // → login del banco
+    } catch (_) {
+      bankMsg('Error de conexión.', 'err');
+      $('btn-bank-connect').disabled = false;
+    }
+  }
+
+  // Al volver del banco: ?bank_code=…&bank_state=…
+  async function handleBankReturn() {
+    const p = new URLSearchParams(window.location.search);
+    const code = p.get('bank_code');
+    const err  = p.get('bank_error');
+    if (!code && !err) return;
+
+    // Limpia la URL para que no quede el código a la vista
+    history.replaceState({}, '', window.location.pathname);
+
+    let pending = null;
+    try { pending = JSON.parse(sessionStorage.getItem('fx_bank_pending') || 'null'); } catch (_) {}
+    sessionStorage.removeItem('fx_bank_pending');
+
+    if (err) { openBankModal(); bankMsg('El banco canceló la conexión.', 'err'); return; }
+    if (pending && pending.state && p.get('bank_state') && pending.state !== p.get('bank_state')) {
+      openBankModal(); bankMsg('Conexión no válida. Inténtalo de nuevo.', 'err'); return;
+    }
+
+    openBankModal();
+    bankMsg('Finalizando conexión…', '');
+    try {
+      const r = await fetch('/api/bank/session', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      });
+      const d = await r.json();
+      if (!r.ok || !d.accounts || !d.accounts.length) { bankMsg('No se pudieron leer tus cuentas.', 'err'); return; }
+      bankLink = {
+        aspsp: (pending && pending.aspsp) || (d.aspsp && d.aspsp.name) || 'Tu banco',
+        sessionId: d.session_id || null,
+        accounts: d.accounts,
+        linkedAt: new Date().toISOString(),
+        lastSync: null,
+      };
+      saveBank();
+      renderBankUI();
+      bankMsg('', '');
+      await syncBank(true);   // primera importación
+    } catch (_) {
+      bankMsg('Error al finalizar la conexión.', 'err');
+    }
+  }
+
+  // Trae movimientos nuevos y los añade como gastos/ingresos
+  async function syncBank(isFirst) {
+    if (!bankLink || !bankLink.accounts || !bankLink.accounts.length) return;
+    const btn = $('btn-bank-sync');
+    if (btn) btn.disabled = true;
+    bankMsg('Importando movimientos…', '', 'bank-msg2');
+
+    const seen = seenIds();
+    const from = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+    let added = 0, failed = false;
+
+    for (const acc of bankLink.accounts) {
+      try {
+        const r = await fetch('/api/bank/transactions', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ account_uid: acc.uid, date_from: from }),
+        });
+        const d = await r.json();
+        if (!r.ok) { failed = true; continue; }
+        for (const raw of (d.transactions || [])) {
+          const tx = parseTx(raw);
+          if (!tx || seen.has(tx.id)) continue;
+          seen.add(tx.id);
+          if (tx.isExpense) {
+            state.expenses.push({
+              id: Date.now() + Math.floor(Math.random() * 1000),
+              amount: tx.amount,
+              category: guessCategory(tx.concept),
+              concept: tx.concept,
+              date: tx.date,
+              fromBank: true,
+            });
+            state.balance -= tx.amount;
+          } else {
+            state.incomes.push({
+              id: Date.now() + Math.floor(Math.random() * 1000),
+              amount: tx.amount, concept: tx.concept, date: tx.date, fromBank: true,
+            });
+            state.balance += tx.amount;
+          }
+          added++;
+        }
+      } catch (_) { failed = true; }
+    }
+
+    saveSeen(seen);
+    if (added) {
+      saveExpenses(); saveIncomes(); saveBalance();
+      renderMovements(); renderCategoryStats(); renderBudgetBar();
+      $('balance-display').textContent = formatMoney(state.balance);
+      $('summary-balance').textContent = formatMoney(state.balance);
+      $('summary-spent').textContent   = formatMoney(getTotalSpent());
+    }
+    bankLink.lastSync = new Date().toISOString();
+    saveBank(); renderBankUI();
+
+    if (btn) btn.disabled = false;
+    bankMsg(
+      failed && !added ? 'No se pudieron leer los movimientos.'
+        : added ? `✓ ${added} movimiento(s) importado(s).`
+        : isFirst ? 'Conectado. Aún no hay movimientos nuevos.' : 'Todo al día, no hay nada nuevo.',
+      failed && !added ? 'err' : 'ok', 'bank-msg2'
+    );
+  }
+
+  function handleBankDisconnect() {
+    bankLink = null;
+    saveBank();
+    renderBankUI();
+    bankMsg('', '');
+  }
+
+  /* -----------------------------------------------------------
      6. ACCIONES
      ----------------------------------------------------------- */
+  // Notificación LOCAL: cada gasto que registras salta en la barra del móvil.
+  // No lee pagos externos — la lanza la propia app al pulsar "registrar".
+  async function notifyExpense(amount, balance, cat, concept) {
+    if (!('Notification' in window)) return;
+    try { if (Notification.permission === 'default') await Notification.requestPermission(); }
+    catch (_) {}
+    if (Notification.permission !== 'granted') return;
+    const label = `${cat.emoji} ${cat.label}${concept ? ' · ' + concept : ''}`;
+    const opts = {
+      body: `−${formatMoney(amount)} · ${label}\nSaldo: ${formatMoney(balance)}`,
+      icon: 'icon-192.png', badge: 'icon-192.png', tag: 'flux-expense', renotify: true,
+    };
+    try {
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (reg && reg.showNotification) { reg.showNotification('💸 Gasto registrado', opts); return; }
+    } catch (_) {}
+    try { new Notification('💸 Gasto registrado', opts); } catch (_) {}
+  }
+
   function handleRegister() {
     const amount  = parseFloat(keypadInput);
     // Gasto → concepto/subcategoría elegido en el pill; Ingreso → texto libre
@@ -1348,6 +1624,7 @@
       saveExpenses();
       saveBalance();
       showFeedback(`✓ ${formatMoney(amount)} en ${cat.emoji} ${cat.label}${concept ? ' · ' + concept : ''}.`, 'ok');
+      notifyExpense(amount, state.balance, cat, concept);
 
     } else {
       state.incomes.push({ id: Date.now(), amount, concept: concept || 'Ingreso', date: new Date().toISOString() });
@@ -2044,6 +2321,20 @@
     $('cloud-pass').addEventListener('keydown', e => {
       if (e.key === 'Enter') handleCloudPrimary();
     });
+
+    // Banco — importación automática de gastos
+    loadBank();
+    renderBankUI();
+    $('btn-bank').addEventListener('click', openBankModal);
+    $('btn-bank-cancel').addEventListener('click', closeBankModal);
+    $('btn-bank-close').addEventListener('click', closeBankModal);
+    $('bank-modal').addEventListener('click', e => {
+      if (e.target === $('bank-modal')) closeBankModal();
+    });
+    $('btn-bank-connect').addEventListener('click', handleBankConnect);
+    $('btn-bank-sync').addEventListener('click', () => syncBank(false));
+    $('btn-bank-disconnect').addEventListener('click', handleBankDisconnect);
+    handleBankReturn();
 
     // Estadísticas — gráfico y chips
     $('stats-chart').addEventListener('click', e => {

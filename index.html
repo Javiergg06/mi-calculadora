@@ -72,6 +72,12 @@
             </svg>
             <span id="cloud-dot" class="cloud-dot hidden"></span>
           </button>
+          <button id="btn-bank" class="icon-circle-btn" aria-label="Conectar banco">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:18px;height:18px">
+              <path d="M10 1.5l8 4v1.5H2V5.5l8-4zM4 9h2v6H4V9zm5 0h2v6H9V9zm5 0h2v6h-2V9zM2 16.5h16V18H2v-1.5z"/>
+            </svg>
+            <span id="bank-dot" class="cloud-dot hidden"></span>
+          </button>
           <button id="btn-add-account" class="icon-circle-btn" aria-label="Añadir cuenta">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:18px;height:18px">
               <path d="M10 5a.75.75 0 01.75.75v3.5h3.5a.75.75 0 010 1.5h-3.5v3.5a.75.75 0 01-1.5 0v-3.5h-3.5a.75.75 0 010-1.5h3.5v-3.5A.75.75 0 0110 5z" />
@@ -598,6 +604,36 @@
           <button id="btn-cloud-sync" class="reset-sheet-confirm reset-sheet-create">Sincronizar ahora</button>
           <button id="btn-cloud-signout" class="reset-sheet-cancel">Cerrar sesión</button>
           <button id="btn-cloud-close" class="cloud-link">Cerrar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL — BANCO (importación automática de gastos) -->
+    <div id="bank-modal" class="reset-modal hidden">
+      <div class="reset-sheet">
+        <div class="reset-sheet-icon">🏦</div>
+
+        <!-- Vista: NO conectado -->
+        <div id="bank-connect-view">
+          <h2 class="reset-sheet-title">Conecta tu banco</h2>
+          <p class="reset-sheet-sub">Tus compras con tarjeta se añadirán solas como gastos. Solo lectura: Flux nunca puede mover tu dinero.</p>
+          <select id="bank-select" class="account-name-field">
+            <option value="">Cargando bancos…</option>
+          </select>
+          <p id="bank-msg" class="cloud-msg hidden"></p>
+          <button id="btn-bank-connect" class="reset-sheet-confirm reset-sheet-create">Conectar</button>
+          <button id="btn-bank-cancel" class="reset-sheet-cancel">Más tarde</button>
+        </div>
+
+        <!-- Vista: conectado -->
+        <div id="bank-linked-view" class="hidden">
+          <h2 class="reset-sheet-title">Banco conectado</h2>
+          <p class="reset-sheet-sub"><strong id="bank-name-label">—</strong> · <span id="bank-acc-count">0</span> cuenta(s)</p>
+          <p id="bank-sync-status" class="cloud-sync-status">—</p>
+          <p id="bank-msg2" class="cloud-msg hidden"></p>
+          <button id="btn-bank-sync" class="reset-sheet-confirm reset-sheet-create">Importar gastos ahora</button>
+          <button id="btn-bank-disconnect" class="reset-sheet-cancel">Desconectar banco</button>
+          <button id="btn-bank-close" class="cloud-link">Cerrar</button>
         </div>
       </div>
     </div>
