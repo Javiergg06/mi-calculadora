@@ -16,7 +16,11 @@ export default async function handler(req, res) {
     }));
     return res.status(200).json({ banks });
   } catch (e) {
-    if (e.message === 'missing_config') return res.status(500).json({ error: 'Falta configurar ENABLE_BANKING_APP_ID / ENABLE_BANKING_PEM' });
+    if (e.message === 'missing_config') return res.status(500).json({
+      error: 'Falta configurar credenciales',
+      app_id_present: !!process.env.ENABLE_BANKING_APP_ID,
+      pem_present: !!process.env.ENABLE_BANKING_PEM,
+    });
     return res.status(500).json({ error: 'Error interno' });
   }
 }
