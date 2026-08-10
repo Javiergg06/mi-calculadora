@@ -1513,7 +1513,9 @@
     bankMsg('Importando movimientos…', '', 'bank-msg2');
 
     const seen = seenIds();
-    const from = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+    // Primera importación: 90 días (para recoger el histórico). Después, 30.
+    const days = bankLink.lastSync ? 30 : 90;
+    const from = new Date(Date.now() - days * 24 * 3600 * 1000).toISOString().slice(0, 10);
     let added = 0, failed = false;
 
     for (const acc of bankLink.accounts) {
