@@ -1427,11 +1427,15 @@
       const d = await r.json();
       const banks = d.banks || [];
       if (!banks.length) { sel.innerHTML = '<option value="">No hay bancos disponibles</option>'; return; }
+      // "Mock ASPSP" es el banco simulado de pruebas: nombre claro para el usuario
+      const pretty = (n) => /mock/i.test(n) ? '🧪 Banco de pruebas (simulado)' : n;
       sel.innerHTML = banks
-        .map(b => `<option value="${escapeHtml(b.name)}">${escapeHtml(b.name)}</option>`)
+        .map(b => `<option value="${escapeHtml(b.name)}">${escapeHtml(pretty(b.name))}</option>`)
         .join('');
+      const mock = banks.find(b => /mock/i.test(b.name));
       const bbva = banks.find(b => /bbva/i.test(b.name));
-      if (bbva) sel.value = bbva.name;
+      if (mock) sel.value = mock.name;        // por defecto, el de pruebas
+      else if (bbva) sel.value = bbva.name;
     } catch (_) {
       sel.innerHTML = '<option value="">Error al cargar</option>';
     }
